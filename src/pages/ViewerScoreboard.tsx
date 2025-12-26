@@ -4,10 +4,13 @@ import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { BatsmanCard } from '@/components/BatsmanCard';
 import { BowlerCard } from '@/components/BowlerCard';
 import { useMatch } from '@/hooks/useMatch';
+import { useFullscreen } from '@/hooks/useFullscreen';
+import { Maximize, Minimize } from 'lucide-react';
 
 const ViewerScoreboard = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const { match, loading, error } = useMatch(matchId || null);
+  const { isFullscreen, toggleFullscreen } = useFullscreen();
 
   if (loading) {
     return (
@@ -74,24 +77,32 @@ const ViewerScoreboard = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header title={match.name} />
+      {!isFullscreen && <Header title={match.name} />}
       
       <main className="container px-4 py-6 max-w-md mx-auto space-y-6">
-        {/* Status Badge */}
-        <div className="text-center">
+        {/* Fullscreen Toggle */}
+        <div className="flex justify-between items-center">
           {getStatusBadge()}
+          <button
+            onClick={toggleFullscreen}
+            className="p-2 rounded-lg bg-secondary text-secondary-foreground"
+          >
+            {isFullscreen ? <Minimize className="w-5 h-5" /> : <Maximize className="w-5 h-5" />}
+          </button>
         </div>
+
+        {/* Free Hit Indicator */}
+        {match.isFreeHit && match.status === 'live' && (
+          <div className="bg-success/20 border-2 border-success rounded-xl py-3 px-4 text-center animate-pulse">
+            <span className="text-success font-bold text-lg">🏏 FREE HIT</span>
+          </div>
+        )}
 
         {/* Match Info */}
         <div className="text-center">
           <p className="text-sm text-muted-foreground">
             {match.overs} overs • {match.ballType} ball • {match.turfType}
           </p>
-          {match.toss.winner && (
-            <p className="text-sm text-muted-foreground mt-1">
-              {match.toss.winner === 'A' ? match.teamA.name : match.teamB.name} won toss, chose to {match.toss.decision}
-            </p>
-          )}
         </div>
 
         {/* Current Innings Score */}
@@ -102,7 +113,7 @@ const ViewerScoreboard = () => {
           target={target}
         />
 
-        {/* Second Team Score (if available) */}
+        {/* Second Team Score */}
         {match.currentInnings === 2 && (
           <div className="score-card text-center opacity-70">
             <p className="text-sm font-medium text-muted-foreground mb-1">
@@ -118,12 +129,8 @@ const ViewerScoreboard = () => {
         {match.status === 'live' && (
           <div className="space-y-3">
             <p className="text-sm font-medium text-muted-foreground">Batting</p>
-            {striker && (
-              <BatsmanCard player={striker} isStriker />
-            )}
-            {nonStriker && (
-              <BatsmanCard player={nonStriker} />
-            )}
+            {striker && <BatsmanCard player={striker} isStriker />}
+            {nonStriker && <BatsmanCard player={nonStriker} />}
             
             <p className="text-sm font-medium text-muted-foreground mt-4">Bowling</p>
             <BowlerCard player={currentBowler} match={match} />

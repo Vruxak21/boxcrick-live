@@ -6,18 +6,23 @@ import { BatsmanCard } from '@/components/BatsmanCard';
 import { BowlerCard } from '@/components/BowlerCard';
 import { RunButtons } from '@/components/RunButtons';
 import { ExtraButtons } from '@/components/ExtraButtons';
+import { WicketTypeSelector } from '@/components/WicketTypeSelector';
 import { useMatch, recordBall, selectNewBatsman, changeBowler, startSecondInnings } from '@/hooks/useMatch';
+import { useFullscreen } from '@/hooks/useFullscreen';
 import { toast } from '@/hooks/use-toast';
-import { Share2, Eye } from 'lucide-react';
+import { Share2, Eye, Maximize, Minimize } from 'lucide-react';
+import { WicketType } from '@/types/match';
 
 const UmpireScoring = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
   const { match, loading, error } = useMatch(matchId || null);
+  const { isFullscreen, toggleFullscreen } = useFullscreen();
   
   const [showWicketModal, setShowWicketModal] = useState(false);
   const [showBowlerModal, setShowBowlerModal] = useState(false);
   const [showNewBatsmanModal, setShowNewBatsmanModal] = useState(false);
+  const [showNoBallRunsModal, setShowNoBallRunsModal] = useState(false);
   const [pendingWicket, setPendingWicket] = useState(false);
   const [processing, setProcessing] = useState(false);
 
@@ -25,7 +30,7 @@ const UmpireScoring = () => {
     if (!matchId || processing) return;
     setProcessing(true);
     try {
-      await recordBall(matchId, runs);
+      await recordBall(matchId, { runs });
     } catch (error) {
       console.error('Error recording ball:', error);
       toast({
@@ -41,15 +46,31 @@ const UmpireScoring = () => {
     if (!matchId || processing) return;
     
     if (type === 'dead') {
-      // Dead ball - no runs, no ball counted
+      return;
+    }
+
+    if (type === 'noball') {
+      setShowNoBallRunsModal(true);
       return;
     }
 
     setProcessing(true);
     try {
-      await recordBall(matchId, 0, type);
+      await recordBall(matchId, { runs: 0, extraType: type });
     } catch (error) {
       console.error('Error recording extra:', error);
+    }
+    setProcessing(false);
+  };
+
+  const handleNoBallWithRuns = async (runsOffBat: number) => {
+    if (!matchId || processing) return;
+    setProcessing(true);
+    try {
+      await recordBall(matchId, { runs: 0, extraType: 'noball', runsOffBat });
+      setShowNoBallRunsModal(false);
+    } catch (error) {
+      console.error('Error recording no ball:', error);
     }
     setProcessing(false);
   };
@@ -58,14 +79,13 @@ const UmpireScoring = () => {
     setShowWicketModal(true);
   };
 
-  const confirmWicket = async () => {
+  const confirmWicket = async (wicketType: WicketType, fielder?: string) => {
     if (!matchId || processing) return;
     setProcessing(true);
     try {
-      await recordBall(matchId, 0, undefined, true);
+      await recordBall(matchId, { runs: 0, isWicket: true, wicketType, fielder });
       setShowWicketModal(false);
       
-      // Check if need new batsman
       const battingTeam = match?.battingTeam === 'A' ? match.teamA : match?.teamB;
       const availableBatsmen = battingTeam?.players.filter(p => !p.isOut && p.id !== match?.currentBatsmen.nonStriker);
       
@@ -145,7 +165,6 @@ const UmpireScoring = () => {
     );
   }
 
-  // Handle different match states
   if (match.status === 'completed') {
     navigate(`/match/${matchId}/result`);
     return null;
@@ -197,12 +216,11 @@ const UmpireScoring = () => {
     ? (match.battingTeam === 'A' ? match.teamB.totalRuns : match.teamA.totalRuns)
     : undefined;
 
-  // Check if over is complete
   const isOverComplete = battingTeam.totalBalls > 0 && battingTeam.totalBalls % 6 === 0;
 
   return (
-    <div className="min-h-screen bg-background flex flex-col">
-      <Header title={match.name} showBack />
+    <div className={`min-h-screen bg-background flex flex-col ${isFullscreen ? 'fullscreen-mode' : ''}`}>
+      {!isFullscreen && <Header title={match.name} showBack />}
       
       <main className="flex-1 container px-4 py-4 max-w-md mx-auto flex flex-col safe-area-bottom">
         {/* Top Actions */}
@@ -219,7 +237,13 @@ const UmpireScoring = () => {
             className="flex-1 flex items-center justify-center gap-2 py-3 rounded-xl bg-secondary text-secondary-foreground"
           >
             <Eye className="w-4 h-4" />
-            Viewer Mode
+            Viewer
+          </button>
+          <button
+            onClick={toggleFullscreen}
+            className="px-4 py-3 rounded-xl bg-secondary text-secondary-foreground"
+          >
+            {isFullscreen ? <Minimize className="w-4 h-4" /> : <Maximize className="w-4 h-4" />}
           </button>
         </div>
 
@@ -266,32 +290,49 @@ const UmpireScoring = () => {
             onExtra={handleExtra} 
             onWicket={handleWicket} 
             disabled={processing || pendingWicket}
+            isFreeHit={match.isFreeHit}
           />
         </div>
       </main>
 
-      {/* Wicket Confirmation Modal */}
-      {showWicketModal && (
+      {/* Wicket Type Selection Modal */}
+      {showWicketModal && striker && (
+        <WicketTypeSelector
+          batsmanName={striker.name}
+          bowlingTeamPlayers={bowlingTeam.players}
+          onSelect={confirmWicket}
+          onCancel={() => setShowWicketModal(false)}
+          isFreeHit={match.isFreeHit}
+        />
+      )}
+
+      {/* No Ball Runs Modal */}
+      {showNoBallRunsModal && (
         <div className="fixed inset-0 bg-foreground/50 flex items-end justify-center z-50">
           <div className="bg-card w-full max-w-md rounded-t-3xl p-6 animate-fade-in safe-area-bottom">
-            <h3 className="text-xl font-bold mb-4 text-center">Confirm Wicket</h3>
-            <p className="text-muted-foreground text-center mb-6">
-              {striker?.name} is out?
+            <h3 className="text-xl font-bold mb-4 text-center">Runs off No Ball</h3>
+            <p className="text-sm text-muted-foreground text-center mb-4">
+              1 run added as no ball. How many runs scored off the bat?
             </p>
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                onClick={() => setShowWicketModal(false)}
-                className="tap-button bg-secondary text-secondary-foreground py-4"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={confirmWicket}
-                className="tap-button bg-destructive text-destructive-foreground py-4"
-              >
-                Confirm Out
-              </button>
+            <div className="grid grid-cols-4 gap-3 mb-4">
+              {[0, 1, 2, 3, 4, 6].map((runs) => (
+                <button
+                  key={runs}
+                  onClick={() => handleNoBallWithRuns(runs)}
+                  className={`tap-button py-4 text-lg ${
+                    runs === 4 || runs === 6 ? 'bg-success text-success-foreground' : 'bg-secondary text-secondary-foreground'
+                  }`}
+                >
+                  {runs}
+                </button>
+              ))}
             </div>
+            <button
+              onClick={() => setShowNoBallRunsModal(false)}
+              className="w-full tap-button bg-muted text-muted-foreground py-4"
+            >
+              Cancel
+            </button>
           </div>
         </div>
       )}

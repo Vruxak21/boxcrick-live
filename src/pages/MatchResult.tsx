@@ -1,12 +1,18 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { useMatch } from '@/hooks/useMatch';
-import { Trophy, Home } from 'lucide-react';
+import { useMatch, restartMatch } from '@/hooks/useMatch';
+import { Trophy, Home, RotateCcw } from 'lucide-react';
 
 const MatchResult = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
   const { match, loading, error } = useMatch(matchId || null);
+
+  const handleRestart = async () => {
+    if (!matchId) return;
+    await restartMatch(matchId);
+    navigate(`/match/${matchId}/toss`);
+  };
 
   if (loading) {
     return (
@@ -33,6 +39,12 @@ const MatchResult = () => {
     ? match.teamB.name 
     : 'Tie';
 
+  const getStrikeRate = (runs: number, balls: number) => 
+    balls > 0 ? ((runs / balls) * 100).toFixed(1) : '0.0';
+
+  const getEconomy = (runs: number, balls: number) =>
+    balls > 0 ? ((runs / balls) * 6).toFixed(2) : '0.00';
+
   return (
     <div className="min-h-screen bg-background">
       <Header title="Match Complete" />
@@ -58,87 +70,70 @@ const MatchResult = () => {
           )}
         </div>
 
-        {/* Match Summary */}
-        <div className="score-card mb-8">
-          <h2 className="text-lg font-bold mb-4 text-center">{match.name}</h2>
-          
-          <div className="space-y-4">
-            {/* Team A */}
-            <div className={`p-4 rounded-xl ${
-              match.winner === 'A' ? 'bg-success/10 border-2 border-success' : 'bg-secondary'
+        {/* Team Scores */}
+        <div className="space-y-4 mb-8">
+          {[match.teamA, match.teamB].map((team, idx) => (
+            <div key={idx} className={`score-card ${
+              match.winner === (idx === 0 ? 'A' : 'B') ? 'border-2 border-success' : ''
             }`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold">{match.teamA.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    ({Math.floor(match.teamA.totalBalls / 6)}.{match.teamA.totalBalls % 6} overs)
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-bold">
-                    {match.teamA.totalRuns}
-                    <span className="text-lg text-muted-foreground">/{match.teamA.totalWickets}</span>
-                  </p>
+              <div className="flex justify-between items-center mb-4">
+                <h3 className="font-bold text-lg">{team.name}</h3>
+                <p className="text-2xl font-bold">
+                  {team.totalRuns}/{team.totalWickets}
+                  <span className="text-sm text-muted-foreground ml-2">
+                    ({Math.floor(team.totalBalls / 6)}.{team.totalBalls % 6})
+                  </span>
+                </p>
+              </div>
+
+              {/* Batting Scorecard */}
+              <div className="mb-4">
+                <p className="text-sm font-semibold text-muted-foreground mb-2">Batting</p>
+                <div className="space-y-1 text-sm">
+                  {team.players.filter(p => p.ballsFaced > 0 || p.isOut).map(player => (
+                    <div key={player.id} className="flex justify-between">
+                      <span className={player.isOut ? 'text-muted-foreground' : 'font-medium'}>
+                        {player.name} {player.isJoker && '🃏'}
+                      </span>
+                      <span>
+                        {player.runs}({player.ballsFaced}) 
+                        <span className="text-muted-foreground ml-1">
+                          SR: {getStrikeRate(player.runs, player.ballsFaced)}
+                        </span>
+                      </span>
+                    </div>
+                  ))}
                 </div>
               </div>
-            </div>
 
-            {/* Team B */}
-            <div className={`p-4 rounded-xl ${
-              match.winner === 'B' ? 'bg-success/10 border-2 border-success' : 'bg-secondary'
-            }`}>
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="font-semibold">{match.teamB.name}</p>
-                  <p className="text-sm text-muted-foreground">
-                    ({Math.floor(match.teamB.totalBalls / 6)}.{match.teamB.totalBalls % 6} overs)
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-3xl font-bold">
-                    {match.teamB.totalRuns}
-                    <span className="text-lg text-muted-foreground">/{match.teamB.totalWickets}</span>
-                  </p>
-                </div>
+              {/* Extras */}
+              <div className="text-sm text-muted-foreground">
+                Extras: {team.extras.wides + team.extras.noBalls + team.extras.byes + team.extras.legByes}
+                <span className="ml-1">
+                  (W: {team.extras.wides}, NB: {team.extras.noBalls})
+                </span>
               </div>
             </div>
-          </div>
-        </div>
-
-        {/* Match Details */}
-        <div className="score-card mb-8">
-          <h3 className="font-semibold mb-3">Match Details</h3>
-          <div className="space-y-2 text-sm">
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Overs</span>
-              <span>{match.overs}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Ball Type</span>
-              <span className="capitalize">{match.ballType}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Turf Type</span>
-              <span className="capitalize">{match.turfType}</span>
-            </div>
-            <div className="flex justify-between">
-              <span className="text-muted-foreground">Toss</span>
-              <span>
-                {match.toss.winner === 'A' ? match.teamA.name : match.teamB.name} 
-                {' '}({match.toss.decision})
-              </span>
-            </div>
-          </div>
+          ))}
         </div>
 
         {/* Actions */}
-        <button
-          onClick={() => navigate('/')}
-          className="w-full tap-button bg-primary text-primary-foreground text-lg py-5 font-bold flex items-center justify-center gap-2"
-        >
-          <Home className="w-5 h-5" />
-          Back to Home
-        </button>
+        <div className="space-y-3">
+          <button
+            onClick={handleRestart}
+            className="w-full tap-button bg-accent text-accent-foreground text-lg py-5 font-bold flex items-center justify-center gap-2"
+          >
+            <RotateCcw className="w-5 h-5" />
+            Restart Match (Same Teams)
+          </button>
+          <button
+            onClick={() => navigate('/')}
+            className="w-full tap-button bg-primary text-primary-foreground text-lg py-5 font-bold flex items-center justify-center gap-2"
+          >
+            <Home className="w-5 h-5" />
+            Back to Home
+          </button>
+        </div>
       </main>
     </div>
   );

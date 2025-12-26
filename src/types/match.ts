@@ -1,11 +1,19 @@
+export type WicketType = 'bowled' | 'lbw' | 'caught' | 'runout' | 'stumped' | 'hitwicket';
+
 export interface Player {
   id: string;
   name: string;
   runs: number;
   ballsFaced: number;
+  fours: number;
+  sixes: number;
   isOut: boolean;
   howOut?: string;
+  wicketType?: WicketType;
+  fielder?: string;
+  bowlerWhoGotWicket?: string;
   isOnStrike?: boolean;
+  isJoker?: boolean;
 }
 
 export interface BowlerStats {
@@ -15,6 +23,8 @@ export interface BowlerStats {
   balls: number;
   runs: number;
   wickets: number;
+  noBalls: number;
+  wides: number;
   extras: number;
 }
 
@@ -40,9 +50,20 @@ export interface Ball {
   extras: number;
   extraType?: 'wide' | 'noball' | 'bye' | 'legbye' | 'dead';
   isWicket: boolean;
+  wicketType?: WicketType;
+  fielder?: string;
   batsmanId: string;
   bowlerId: string;
   timestamp: number;
+  isFreeHit?: boolean;
+  runsOffBat?: number;
+}
+
+export interface FallOfWicket {
+  playerName: string;
+  score: number;
+  overs: string;
+  wicketNumber: number;
 }
 
 export interface Match {
@@ -71,6 +92,16 @@ export interface Match {
   winMargin?: string;
   createdAt: number;
   updatedAt: number;
+  isFreeHit?: boolean;
+  jokerPlayerId?: string;
+  fallOfWickets: {
+    teamA: FallOfWicket[];
+    teamB: FallOfWicket[];
+  };
+  bowlerStats: {
+    teamA: Record<string, BowlerStats>;
+    teamB: Record<string, BowlerStats>;
+  };
 }
 
 export type MatchStatus = Match['status'];
