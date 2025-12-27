@@ -142,4 +142,15 @@
   .safe-area-bottom {
     padding-bottom: env(safe-area-inset-bottom, 1rem);
   }
+
+  .fullscreen-mode {
+    width: 100vw;
+    height: 100vh;
+    overflow: auto;
+  }
+
+  .fullscreen-mode main {
+    max-width: 100%;
+    padding-top: 1rem;
+  }
 }

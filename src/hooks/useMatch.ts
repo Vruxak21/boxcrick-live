@@ -559,3 +559,58 @@ export const deleteMatch = async (matchId: string): Promise<void> => {
   delete matches[matchId];
   localStorage.setItem(STORAGE_KEY, JSON.stringify(matches));
 };
+
+// Add player during live match
+export const addPlayerDuringMatch = async (matchId: string, team: 'A' | 'B', playerName: string) => {
+  const matches = getStoredMatches();
+  const match = matches[matchId];
+  if (!match || !['live', 'innings_break'].includes(match.status)) return;
+  
+  const teamKey = team === 'A' ? 'teamA' : 'teamB';
+  const newPlayer: Player = {
+    id: generateId(),
+    name: playerName,
+    runs: 0,
+    ballsFaced: 0,
+    fours: 0,
+    sixes: 0,
+    isOut: false,
+  };
+  
+  saveMatch({
+    ...match,
+    [teamKey]: { ...match[teamKey], players: [...match[teamKey].players, newPlayer] },
+    updatedAt: Date.now(),
+  });
+};
+
+// Delete player during live match (only if not active)
+export const deletePlayerDuringMatch = async (matchId: string, team: 'A' | 'B', playerId: string): Promise<{ success: boolean; error?: string }> => {
+  const matches = getStoredMatches();
+  const match = matches[matchId];
+  if (!match) return { success: false, error: 'Match not found' };
+  
+  // Check if player is currently active
+  if (match.currentBatsmen.striker === playerId || match.currentBatsmen.nonStriker === playerId) {
+    return { success: false, error: 'Cannot delete player who is currently batting' };
+  }
+  if (match.currentBowler === playerId) {
+    return { success: false, error: 'Cannot delete player who is currently bowling' };
+  }
+  
+  const teamKey = team === 'A' ? 'teamA' : 'teamB';
+  const updatedPlayers = match[teamKey].players.filter(p => p.id !== playerId);
+  
+  // Must have at least 2 players
+  if (updatedPlayers.length < 2) {
+    return { success: false, error: 'Team must have at least 2 players' };
+  }
+  
+  saveMatch({
+    ...match,
+    [teamKey]: { ...match[teamKey], players: updatedPlayers },
+    updatedAt: Date.now(),
+  });
+  
+  return { success: true };
+};

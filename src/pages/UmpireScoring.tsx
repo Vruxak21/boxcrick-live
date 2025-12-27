@@ -7,10 +7,11 @@ import { BowlerCard } from '@/components/BowlerCard';
 import { RunButtons } from '@/components/RunButtons';
 import { ExtraButtons } from '@/components/ExtraButtons';
 import { WicketTypeSelector } from '@/components/WicketTypeSelector';
-import { useMatch, recordBall, selectNewBatsman, changeBowler, startSecondInnings } from '@/hooks/useMatch';
+import { RosterManager } from '@/components/RosterManager';
+import { useMatch, recordBall, selectNewBatsman, changeBowler, addPlayerDuringMatch, deletePlayerDuringMatch } from '@/hooks/useMatch';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { toast } from '@/hooks/use-toast';
-import { Share2, Eye, Maximize, Minimize } from 'lucide-react';
+import { Share2, Eye, Maximize, Minimize, Users } from 'lucide-react';
 import { WicketType } from '@/types/match';
 
 const UmpireScoring = () => {
@@ -23,6 +24,7 @@ const UmpireScoring = () => {
   const [showBowlerModal, setShowBowlerModal] = useState(false);
   const [showNewBatsmanModal, setShowNewBatsmanModal] = useState(false);
   const [showNoBallRunsModal, setShowNoBallRunsModal] = useState(false);
+  const [showRosterModal, setShowRosterModal] = useState<'A' | 'B' | null>(null);
   const [pendingWicket, setPendingWicket] = useState(false);
   const [processing, setProcessing] = useState(false);
 
@@ -250,6 +252,31 @@ const UmpireScoring = () => {
           target={target}
         />
 
+        {/* Roster Edit Buttons */}
+        <div className="flex gap-2 mt-3">
+          <button
+            onClick={() => setShowRosterModal(match.battingTeam)}
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-muted text-muted-foreground text-sm"
+          >
+            <Users className="w-4 h-4" />
+            {battingTeam.name}
+          </button>
+          <button
+            onClick={() => setShowRosterModal(match.bowlingTeam)}
+            className="flex-1 flex items-center justify-center gap-2 py-2 rounded-xl bg-muted text-muted-foreground text-sm"
+          >
+            <Users className="w-4 h-4" />
+            {bowlingTeam.name}
+          </button>
+        </div>
+
+        {/* Free Hit Indicator */}
+        {match.isFreeHit && (
+          <div className="mt-3 bg-success/20 border border-success/40 rounded-xl p-3 text-center">
+            <span className="text-lg font-bold text-success">🎯 FREE HIT</span>
+          </div>
+        )}
+
         {/* Current Players */}
         <div className="mt-4 space-y-3">
           {striker && (
@@ -337,16 +364,35 @@ const UmpireScoring = () => {
         <div className="fixed inset-0 bg-foreground/50 flex items-end justify-center z-50">
           <div className="bg-card w-full max-w-md rounded-t-3xl p-6 animate-fade-in safe-area-bottom">
             <h3 className="text-xl font-bold mb-4 text-center">Select New Batsman</h3>
+            
+            {/* Joker restriction notice */}
+            {match.jokerPlayerId && (
+              <p className="text-xs text-warning text-center mb-3">
+                🃏 Joker cannot bat if currently bowling
+              </p>
+            )}
+            
             <div className="grid grid-cols-2 gap-3">
-              {availableBatsmen.map((player) => (
-                <button
-                  key={player.id}
-                  onClick={() => handleSelectNewBatsman(player.id)}
-                  className="tap-button bg-secondary text-secondary-foreground py-4"
-                >
-                  {player.name}
-                </button>
-              ))}
+              {availableBatsmen.map((player) => {
+                // Joker restriction: can't bat if joker is bowling
+                const isJokerBowling = player.isJoker && 
+                  bowlingTeam.players.find(b => b.id === match.currentBowler)?.isJoker;
+                
+                return (
+                  <button
+                    key={player.id}
+                    onClick={() => handleSelectNewBatsman(player.id)}
+                    disabled={isJokerBowling}
+                    className={`tap-button py-4 ${
+                      isJokerBowling
+                        ? 'bg-muted text-muted-foreground opacity-50 cursor-not-allowed'
+                        : 'bg-secondary text-secondary-foreground'
+                    }`}
+                  >
+                    {player.name} {player.isJoker && '🃏'}
+                  </button>
+                );
+              })}
             </div>
           </div>
         </div>
@@ -357,20 +403,39 @@ const UmpireScoring = () => {
         <div className="fixed inset-0 bg-foreground/50 flex items-end justify-center z-50">
           <div className="bg-card w-full max-w-md rounded-t-3xl p-6 animate-fade-in safe-area-bottom">
             <h3 className="text-xl font-bold mb-4 text-center">Select Bowler</h3>
+            
+            {/* Joker restriction notice */}
+            {match.jokerPlayerId && (
+              <p className="text-xs text-warning text-center mb-3">
+                🃏 Joker cannot bowl if currently batting
+              </p>
+            )}
+            
             <div className="grid grid-cols-2 gap-3 mb-4">
-              {bowlingTeam.players.map((player) => (
-                <button
-                  key={player.id}
-                  onClick={() => handleChangeBowler(player.id)}
-                  className={`tap-button py-4 ${
-                    player.id === match.currentBowler
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-secondary-foreground'
-                  }`}
-                >
-                  {player.name}
-                </button>
-              ))}
+              {bowlingTeam.players.map((player) => {
+                // Joker restriction: can't bowl if currently batting
+                const isJokerBatting = player.isJoker && (
+                  battingTeam.players.find(p => p.id === match.currentBatsmen.striker)?.isJoker ||
+                  battingTeam.players.find(p => p.id === match.currentBatsmen.nonStriker)?.isJoker
+                );
+                
+                return (
+                  <button
+                    key={player.id}
+                    onClick={() => handleChangeBowler(player.id)}
+                    disabled={isJokerBatting}
+                    className={`tap-button py-4 ${
+                      player.id === match.currentBowler
+                        ? 'bg-primary text-primary-foreground'
+                        : isJokerBatting
+                        ? 'bg-muted text-muted-foreground opacity-50 cursor-not-allowed'
+                        : 'bg-secondary text-secondary-foreground'
+                    }`}
+                  >
+                    {player.name} {player.isJoker && '🃏'}
+                  </button>
+                );
+              })}
             </div>
             <button
               onClick={() => setShowBowlerModal(false)}
@@ -380,6 +445,26 @@ const UmpireScoring = () => {
             </button>
           </div>
         </div>
+      )}
+
+      {/* Roster Manager Modal */}
+      {showRosterModal && (
+        <RosterManager
+          teamName={showRosterModal === 'A' ? match.teamA.name : match.teamB.name}
+          players={showRosterModal === 'A' ? match.teamA.players : match.teamB.players}
+          team={showRosterModal}
+          currentStrikerId={match.currentBatsmen.striker}
+          currentNonStrikerId={match.currentBatsmen.nonStriker}
+          currentBowlerId={match.currentBowler}
+          onAddPlayer={async (team, name) => {
+            if (matchId) await addPlayerDuringMatch(matchId, team, name);
+          }}
+          onDeletePlayer={async (team, playerId) => {
+            if (matchId) return await deletePlayerDuringMatch(matchId, team, playerId);
+            return { success: false, error: 'No match ID' };
+          }}
+          onClose={() => setShowRosterModal(null)}
+        />
       )}
     </div>
   );
