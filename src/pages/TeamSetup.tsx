@@ -1,9 +1,9 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { useMatch, addPlayers, setOpeners } from '@/hooks/useMatch';
+import { useMatch, addPlayers, setOpeners, addJokerPlayer } from '@/hooks/useMatch';
 import { toast } from '@/hooks/use-toast';
-import { Plus, X } from 'lucide-react';
+import { Plus, X, Star } from 'lucide-react';
 
 const TeamSetup = () => {
   const { matchId } = useParams<{ matchId: string }>();
@@ -17,6 +17,15 @@ const TeamSetup = () => {
   const [nonStriker, setNonStriker] = useState<string>('');
   const [bowler, setBowler] = useState<string>('');
   const [saving, setSaving] = useState(false);
+  const [showJokerInput, setShowJokerInput] = useState(false);
+  const [jokerName, setJokerName] = useState('');
+
+  // Skip player entry if teams already have players (2nd innings)
+  useEffect(() => {
+    if (match && match.teamA.players.length > 0 && match.teamB.players.length > 0) {
+      setStep('openers');
+    }
+  }, [match]);
 
   const addPlayerField = (team: 'A' | 'B') => {
     if (team === 'A') {
@@ -50,6 +59,31 @@ const TeamSetup = () => {
     }
   };
 
+  const handleAddJoker = async () => {
+    if (!matchId || !jokerName.trim()) {
+      toast({
+        title: 'Name Required',
+        description: 'Enter the joker player name',
+        variant: 'destructive',
+      });
+      return;
+    }
+
+    setSaving(true);
+    try {
+      await addJokerPlayer(matchId, jokerName.trim());
+      toast({
+        title: 'Joker Added',
+        description: `${jokerName} is now a joker for both teams`,
+      });
+      setShowJokerInput(false);
+      setJokerName('');
+    } catch (err) {
+      console.error('Error adding joker:', err);
+    }
+    setSaving(false);
+  };
+
   const savePlayers = async () => {
     if (!matchId) return;
 
@@ -74,8 +108,8 @@ const TeamSetup = () => {
         title: 'Players Added',
         description: 'Now select openers',
       });
-    } catch (error) {
-      console.error('Error saving players:', error);
+    } catch (err) {
+      console.error('Error saving players:', err);
       toast({
         title: 'Error',
         description: 'Failed to save players',
@@ -108,12 +142,12 @@ const TeamSetup = () => {
     try {
       await setOpeners(matchId, striker, nonStriker, bowler);
       toast({
-        title: 'Match Started',
+        title: match?.currentInnings === 2 ? 'Second Innings Started' : 'Match Started',
         description: 'Good luck!',
       });
       navigate(`/match/${matchId}/umpire`);
-    } catch (error) {
-      console.error('Error starting match:', error);
+    } catch (err) {
+      console.error('Error starting match:', err);
       toast({
         title: 'Error',
         description: 'Failed to start match',
@@ -144,10 +178,14 @@ const TeamSetup = () => {
 
   const battingTeam = match.battingTeam === 'A' ? match.teamA : match.teamB;
   const bowlingTeam = match.battingTeam === 'A' ? match.teamB : match.teamA;
+  const isSecondInnings = match.currentInnings === 2;
+  const target = isSecondInnings 
+    ? (match.battingTeam === 'A' ? match.teamB.totalRuns : match.teamA.totalRuns) + 1
+    : null;
 
   return (
     <div className="min-h-screen bg-background">
-      <Header title="Team Setup" showBack />
+      <Header title={isSecondInnings ? "Second Innings Setup" : "Team Setup"} showBack />
       
       <main className="container px-4 py-6 max-w-md mx-auto safe-area-bottom">
         {step === 'players' ? (
@@ -220,6 +258,47 @@ const TeamSetup = () => {
               </div>
             </div>
 
+            {/* Joker Player */}
+            {!match.jokerPlayerId && !showJokerInput && (
+              <button
+                onClick={() => setShowJokerInput(true)}
+                className="w-full tap-button bg-warning/20 text-warning py-4 font-semibold flex items-center justify-center gap-2"
+              >
+                <Star className="w-5 h-5" />
+                Add Joker Player (Optional)
+              </button>
+            )}
+
+            {showJokerInput && (
+              <div className="score-card bg-warning/10 border-warning/20 space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  Joker can play for both teams
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={jokerName}
+                    onChange={(e) => setJokerName(e.target.value)}
+                    placeholder="Joker Player Name"
+                    className="flex-1 h-12 px-4 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-warning"
+                  />
+                  <button
+                    onClick={handleAddJoker}
+                    disabled={!jokerName.trim() || saving}
+                    className="px-4 rounded-xl bg-warning text-warning-foreground font-semibold disabled:opacity-50"
+                  >
+                    Add
+                  </button>
+                </div>
+                <button
+                  onClick={() => setShowJokerInput(false)}
+                  className="text-sm text-muted-foreground"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
             <button
               onClick={savePlayers}
               disabled={saving}
@@ -233,8 +312,11 @@ const TeamSetup = () => {
         ) : (
           <div className="space-y-8">
             <div className="score-card text-center">
-              <p className="text-muted-foreground">First Innings</p>
+              <p className="text-muted-foreground">{isSecondInnings ? 'Second' : 'First'} Innings</p>
               <p className="text-xl font-bold mt-1">{battingTeam.name} batting</p>
+              {target && (
+                <p className="text-lg text-primary mt-2">Target: {target}</p>
+              )}
             </div>
 
             {/* Select Striker */}
@@ -243,7 +325,7 @@ const TeamSetup = () => {
                 Select Striker
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {battingTeam.players.map((player) => (
+                {battingTeam.players.filter(p => !p.isOut).map((player) => (
                   <button
                     key={player.id}
                     onClick={() => setStriker(player.id)}
@@ -256,7 +338,7 @@ const TeamSetup = () => {
                         : 'bg-secondary hover:bg-secondary/80'
                     }`}
                   >
-                    {player.name}
+                    {player.name} {player.isJoker && '🃏'}
                   </button>
                 ))}
               </div>
@@ -268,7 +350,7 @@ const TeamSetup = () => {
                 Select Non-Striker
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {battingTeam.players.map((player) => (
+                {battingTeam.players.filter(p => !p.isOut).map((player) => (
                   <button
                     key={player.id}
                     onClick={() => setNonStriker(player.id)}
@@ -281,7 +363,7 @@ const TeamSetup = () => {
                         : 'bg-secondary hover:bg-secondary/80'
                     }`}
                   >
-                    {player.name}
+                    {player.name} {player.isJoker && '🃏'}
                   </button>
                 ))}
               </div>
@@ -303,7 +385,7 @@ const TeamSetup = () => {
                         : 'bg-secondary hover:bg-secondary/80'
                     }`}
                   >
-                    {player.name}
+                    {player.name} {player.isJoker && '🃏'}
                   </button>
                 ))}
               </div>
@@ -316,7 +398,7 @@ const TeamSetup = () => {
                 saving || !striker || !nonStriker || !bowler ? 'opacity-50' : ''
               }`}
             >
-              {saving ? 'Starting...' : 'Start Match'}
+              {saving ? 'Starting...' : isSecondInnings ? 'Start Second Innings' : 'Start Match'}
             </button>
           </div>
         )}
