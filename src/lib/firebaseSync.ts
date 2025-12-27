@@ -12,7 +12,8 @@ export const syncMatchToFirebase = async (match: Match): Promise<boolean> => {
   }
 
   try {
-    await setDoc(doc(db!, COLLECTION_NAME, match.id), match);
+    // Use merge for faster updates (only sends changed fields)
+    await setDoc(doc(db!, COLLECTION_NAME, match.id), match, { merge: true });
     return true;
   } catch (error) {
     console.error('Error syncing match to Firebase:', error);

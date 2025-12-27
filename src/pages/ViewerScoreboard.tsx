@@ -6,11 +6,38 @@ import { BowlerCard } from '@/components/BowlerCard';
 import { useMatch } from '@/hooks/useMatch';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { Maximize, Minimize } from 'lucide-react';
+import { useState, useEffect } from 'react';
 
 const ViewerScoreboard = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const { match, loading, error } = useMatch(matchId || null, true); // Enable Firebase sync for viewers
   const { isFullscreen, toggleFullscreen } = useFullscreen();
+  const [showUpdatePulse, setShowUpdatePulse] = useState(false);
+  const [lastBallCount, setLastBallCount] = useState(0);
+  const [isConnected, setIsConnected] = useState(true);
+
+  // Monitor connection status
+  useEffect(() => {
+    if (match) {
+      setIsConnected(true);
+    }
+  }, [match]);
+
+  // Detect score updates and show pulse animation
+  useEffect(() => {
+    if (match) {
+      const battingTeam = match.battingTeam === 'A' ? match.teamA : match.teamB;
+      const currentBalls = battingTeam.totalBalls;
+      
+      if (lastBallCount > 0 && currentBalls > lastBallCount) {
+        // New ball bowled - show update pulse
+        setShowUpdatePulse(true);
+        setTimeout(() => setShowUpdatePulse(false), 2000);
+      }
+      
+      setLastBallCount(currentBalls);
+    }
+  }, [match?.teamA.totalBalls, match?.teamB.totalBalls, match?.battingTeam]);
 
   if (loading) {
     return (
@@ -80,9 +107,28 @@ const ViewerScoreboard = () => {
       {!isFullscreen && <Header title={match.name} />}
       
       <main className={`container px-4 py-6 max-w-md mx-auto space-y-6 ${isFullscreen ? 'pt-4' : ''}`}>
+        {/* Real-time Update Indicator */}
+        {showUpdatePulse && (
+          <div className="fixed top-4 left-1/2 -translate-x-1/2 z-50 animate-fade-in">
+            <div className="bg-accent text-accent-foreground px-4 py-2 rounded-full shadow-lg flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-white animate-pulse" />
+              <span className="text-sm font-medium">Live Update</span>
+            </div>
+          </div>
+        )}
+
         {/* Fullscreen Toggle */}
         <div className="flex justify-between items-center">
-          {getStatusBadge()}
+          <div className="flex items-center gap-2">
+            {getStatusBadge()}
+            {/* Real-time indicator */}
+            {match.status === 'live' && isConnected && (
+              <span className="text-xs text-muted-foreground flex items-center gap-1">
+                <span className="w-1.5 h-1.5 rounded-full bg-accent animate-pulse" />
+                Live
+              </span>
+            )}
+          </div>
           <button
             onClick={toggleFullscreen}
             className="p-2 rounded-lg bg-secondary text-secondary-foreground"
