@@ -76,10 +76,10 @@ const ViewerScoreboard = () => {
     : undefined;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className={`min-h-screen bg-background ${isFullscreen ? 'fullscreen-mode' : ''}`}>
       {!isFullscreen && <Header title={match.name} />}
       
-      <main className="container px-4 py-6 max-w-md mx-auto space-y-6">
+      <main className={`container px-4 py-6 max-w-md mx-auto space-y-6 ${isFullscreen ? 'pt-4' : ''}`}>
         {/* Fullscreen Toggle */}
         <div className="flex justify-between items-center">
           {getStatusBadge()}

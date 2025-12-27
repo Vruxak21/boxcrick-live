@@ -319,28 +319,43 @@ const TeamSetup = () => {
               )}
             </div>
 
+            {/* Joker restriction notice */}
+            {match.jokerPlayerId && (
+              <div className="bg-warning/10 border border-warning/30 rounded-xl p-3">
+                <p className="text-sm text-warning text-center">
+                  🃏 Joker can either bat OR bowl at a time
+                </p>
+              </div>
+            )}
+
             {/* Select Striker */}
             <div className="space-y-3">
               <p className="text-sm font-medium text-muted-foreground">
                 Select Striker
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {battingTeam.players.filter(p => !p.isOut).map((player) => (
-                  <button
-                    key={player.id}
-                    onClick={() => setStriker(player.id)}
-                    disabled={nonStriker === player.id}
-                    className={`p-3 rounded-xl text-left transition-all ${
-                      striker === player.id
-                        ? 'bg-primary text-primary-foreground'
-                        : nonStriker === player.id
-                        ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                        : 'bg-secondary hover:bg-secondary/80'
-                    }`}
-                  >
-                    {player.name} {player.isJoker && '🃏'}
-                  </button>
-                ))}
+                {battingTeam.players.filter(p => !p.isOut).map((player) => {
+                  // Joker restriction: can't bat if selected as bowler
+                  const isJokerBowling = player.isJoker && bowler && bowlingTeam.players.find(b => b.id === bowler)?.isJoker;
+                  const isDisabled = nonStriker === player.id || isJokerBowling;
+                  
+                  return (
+                    <button
+                      key={player.id}
+                      onClick={() => setStriker(player.id)}
+                      disabled={isDisabled}
+                      className={`p-3 rounded-xl text-left transition-all ${
+                        striker === player.id
+                          ? 'bg-primary text-primary-foreground'
+                          : isDisabled
+                          ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                          : 'bg-secondary hover:bg-secondary/80'
+                      }`}
+                    >
+                      {player.name} {player.isJoker && '🃏'}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -350,22 +365,28 @@ const TeamSetup = () => {
                 Select Non-Striker
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {battingTeam.players.filter(p => !p.isOut).map((player) => (
-                  <button
-                    key={player.id}
-                    onClick={() => setNonStriker(player.id)}
-                    disabled={striker === player.id}
-                    className={`p-3 rounded-xl text-left transition-all ${
-                      nonStriker === player.id
-                        ? 'bg-primary text-primary-foreground'
-                        : striker === player.id
-                        ? 'bg-muted text-muted-foreground cursor-not-allowed'
-                        : 'bg-secondary hover:bg-secondary/80'
-                    }`}
-                  >
-                    {player.name} {player.isJoker && '🃏'}
-                  </button>
-                ))}
+                {battingTeam.players.filter(p => !p.isOut).map((player) => {
+                  // Joker restriction: can't bat if selected as bowler, or same as striker
+                  const isJokerBowling = player.isJoker && bowler && bowlingTeam.players.find(b => b.id === bowler)?.isJoker;
+                  const isDisabled = striker === player.id || isJokerBowling;
+                  
+                  return (
+                    <button
+                      key={player.id}
+                      onClick={() => setNonStriker(player.id)}
+                      disabled={isDisabled}
+                      className={`p-3 rounded-xl text-left transition-all ${
+                        nonStriker === player.id
+                          ? 'bg-primary text-primary-foreground'
+                          : isDisabled
+                          ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                          : 'bg-secondary hover:bg-secondary/80'
+                      }`}
+                    >
+                      {player.name} {player.isJoker && '🃏'}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
@@ -375,19 +396,29 @@ const TeamSetup = () => {
                 Select Opening Bowler
               </p>
               <div className="grid grid-cols-2 gap-2">
-                {bowlingTeam.players.map((player) => (
-                  <button
-                    key={player.id}
-                    onClick={() => setBowler(player.id)}
-                    className={`p-3 rounded-xl text-left transition-all ${
-                      bowler === player.id
-                        ? 'bg-primary text-primary-foreground'
-                        : 'bg-secondary hover:bg-secondary/80'
-                    }`}
-                  >
-                    {player.name} {player.isJoker && '🃏'}
-                  </button>
-                ))}
+                {bowlingTeam.players.map((player) => {
+                  // Joker restriction: can't bowl if selected as batsman
+                  const strikerPlayer = battingTeam.players.find(p => p.id === striker);
+                  const nonStrikerPlayer = battingTeam.players.find(p => p.id === nonStriker);
+                  const isJokerBatting = player.isJoker && (strikerPlayer?.isJoker || nonStrikerPlayer?.isJoker);
+                  
+                  return (
+                    <button
+                      key={player.id}
+                      onClick={() => setBowler(player.id)}
+                      disabled={isJokerBatting}
+                      className={`p-3 rounded-xl text-left transition-all ${
+                        bowler === player.id
+                          ? 'bg-primary text-primary-foreground'
+                          : isJokerBatting
+                          ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
+                          : 'bg-secondary hover:bg-secondary/80'
+                      }`}
+                    >
+                      {player.name} {player.isJoker && '🃏'}
+                    </button>
+                  );
+                })}
               </div>
             </div>
 
