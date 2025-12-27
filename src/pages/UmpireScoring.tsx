@@ -120,14 +120,9 @@ const UmpireScoring = () => {
     }
   };
 
-  const handleStartSecondInnings = async () => {
+  const handleStartSecondInnings = () => {
     if (!matchId) return;
-    try {
-      await startSecondInnings(matchId);
-      navigate(`/match/${matchId}/setup`);
-    } catch (error) {
-      console.error('Error starting second innings:', error);
-    }
+    navigate(`/match/${matchId}/innings-break`);
   };
 
   const shareMatch = () => {

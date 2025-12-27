@@ -10,6 +10,7 @@ import TeamSetup from "./pages/TeamSetup";
 import UmpireScoring from "./pages/UmpireScoring";
 import ViewerScoreboard from "./pages/ViewerScoreboard";
 import MatchResult from "./pages/MatchResult";
+import InningsBreak from "./pages/InningsBreak";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -28,6 +29,7 @@ const App = () => (
           <Route path="/match/:matchId/umpire" element={<UmpireScoring />} />
           <Route path="/match/:matchId/view" element={<ViewerScoreboard />} />
           <Route path="/match/:matchId/result" element={<MatchResult />} />
+          <Route path="/match/:matchId/innings-break" element={<InningsBreak />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
       </BrowserRouter>
