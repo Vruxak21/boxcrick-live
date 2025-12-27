@@ -17,7 +17,6 @@ const TeamSetup = () => {
   const [nonStriker, setNonStriker] = useState<string>('');
   const [bowler, setBowler] = useState<string>('');
   const [saving, setSaving] = useState(false);
-  const [showJokerInput, setShowJokerInput] = useState(false);
   const [jokerName, setJokerName] = useState('');
 
   // Skip player entry if teams already have players (2nd innings)
@@ -59,31 +58,6 @@ const TeamSetup = () => {
     }
   };
 
-  const handleAddJoker = async () => {
-    if (!matchId || !jokerName.trim()) {
-      toast({
-        title: 'Name Required',
-        description: 'Enter the joker player name',
-        variant: 'destructive',
-      });
-      return;
-    }
-
-    setSaving(true);
-    try {
-      await addJokerPlayer(matchId, jokerName.trim());
-      toast({
-        title: 'Joker Added',
-        description: `${jokerName} is now a joker for both teams`,
-      });
-      setShowJokerInput(false);
-      setJokerName('');
-    } catch (err) {
-      console.error('Error adding joker:', err);
-    }
-    setSaving(false);
-  };
-
   const savePlayers = async () => {
     if (!matchId) return;
 
@@ -103,6 +77,12 @@ const TeamSetup = () => {
     try {
       await addPlayers(matchId, 'A', teamAFiltered);
       await addPlayers(matchId, 'B', teamBFiltered);
+      
+      // Add joker if provided
+      if (jokerName.trim()) {
+        await addJokerPlayer(matchId, jokerName.trim());
+      }
+      
       setStep('openers');
       toast({
         title: 'Players Added',
@@ -258,44 +238,20 @@ const TeamSetup = () => {
               </div>
             </div>
 
-            {/* Joker Player */}
-            {!match.jokerPlayerId && !showJokerInput && (
-              <button
-                onClick={() => setShowJokerInput(true)}
-                className="w-full tap-button bg-warning/20 text-warning py-4 font-semibold flex items-center justify-center gap-2"
-              >
-                <Star className="w-5 h-5" />
-                Add Joker Player (Optional)
-              </button>
-            )}
-
-            {showJokerInput && (
-              <div className="score-card bg-warning/10 border-warning/20 space-y-3">
-                <p className="text-sm text-muted-foreground">
-                  Joker can play for both teams
-                </p>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    value={jokerName}
-                    onChange={(e) => setJokerName(e.target.value)}
-                    placeholder="Joker Player Name"
-                    className="flex-1 h-12 px-4 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-warning"
-                  />
-                  <button
-                    onClick={handleAddJoker}
-                    disabled={!jokerName.trim() || saving}
-                    className="px-4 rounded-xl bg-warning text-warning-foreground font-semibold disabled:opacity-50"
-                  >
-                    Add
-                  </button>
+            {/* Joker Player - Optional */}
+            {!match.jokerPlayerId && (
+              <div className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <h3 className="text-sm font-medium text-muted-foreground">Joker Player (Optional)</h3>
+                  <Star className="w-4 h-4 text-warning" />
                 </div>
-                <button
-                  onClick={() => setShowJokerInput(false)}
-                  className="text-sm text-muted-foreground"
-                >
-                  Cancel
-                </button>
+                <input
+                  type="text"
+                  value={jokerName}
+                  onChange={(e) => setJokerName(e.target.value)}
+                  placeholder="Can play for both teams"
+                  className="w-full h-12 px-4 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-warning"
+                />
               </div>
             )}
 
@@ -322,8 +278,8 @@ const TeamSetup = () => {
             {/* Joker restriction notice */}
             {match.jokerPlayerId && (
               <div className="bg-warning/10 border border-warning/30 rounded-xl p-3">
-                <p className="text-sm text-warning text-center">
-                  🃏 Joker can either bat OR bowl at a time
+                <p className="text-sm text-center font-medium">
+                  🃏 Joker can either bat <span className="font-bold">OR</span> bowl at a time
                 </p>
               </div>
             )}
@@ -335,9 +291,12 @@ const TeamSetup = () => {
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {battingTeam.players.filter(p => !p.isOut).map((player) => {
-                  // Joker restriction: can't bat if selected as bowler
-                  const isJokerBowling = player.isJoker && bowler && bowlingTeam.players.find(b => b.id === bowler)?.isJoker;
-                  const isDisabled = nonStriker === player.id || isJokerBowling;
+                  // Joker restriction: can't bat if same joker is selected as bowler
+                  const isJokerDisabled = player.isJoker && (
+                    player.id === nonStriker || player.id === bowler
+                  );
+                  // Can't select same player as non-striker
+                  const isDisabled = isJokerDisabled || player.id === nonStriker;
                   
                   return (
                     <button
@@ -366,9 +325,12 @@ const TeamSetup = () => {
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {battingTeam.players.filter(p => !p.isOut).map((player) => {
-                  // Joker restriction: can't bat if selected as bowler, or same as striker
-                  const isJokerBowling = player.isJoker && bowler && bowlingTeam.players.find(b => b.id === bowler)?.isJoker;
-                  const isDisabled = striker === player.id || isJokerBowling;
+                  // Joker restriction: can't bat if same joker is selected as striker or bowler
+                  const isJokerDisabled = player.isJoker && (
+                    player.id === striker || player.id === bowler
+                  );
+                  // Can't select same player as striker
+                  const isDisabled = isJokerDisabled || player.id === striker;
                   
                   return (
                     <button
@@ -397,20 +359,20 @@ const TeamSetup = () => {
               </p>
               <div className="grid grid-cols-2 gap-2">
                 {bowlingTeam.players.map((player) => {
-                  // Joker restriction: can't bowl if selected as batsman
-                  const strikerPlayer = battingTeam.players.find(p => p.id === striker);
-                  const nonStrikerPlayer = battingTeam.players.find(p => p.id === nonStriker);
-                  const isJokerBatting = player.isJoker && (strikerPlayer?.isJoker || nonStrikerPlayer?.isJoker);
+                  // Joker restriction: can't bowl if same joker is selected as batsman
+                  const isJokerDisabled = player.isJoker && (
+                    player.id === striker || player.id === nonStriker
+                  );
                   
                   return (
                     <button
                       key={player.id}
                       onClick={() => setBowler(player.id)}
-                      disabled={isJokerBatting}
+                      disabled={isJokerDisabled}
                       className={`p-3 rounded-xl text-left transition-all ${
                         bowler === player.id
                           ? 'bg-primary text-primary-foreground'
-                          : isJokerBatting
+                          : isJokerDisabled
                           ? 'bg-muted text-muted-foreground cursor-not-allowed opacity-50'
                           : 'bg-secondary hover:bg-secondary/80'
                       }`}

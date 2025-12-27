@@ -9,7 +9,7 @@ import { Maximize, Minimize } from 'lucide-react';
 
 const ViewerScoreboard = () => {
   const { matchId } = useParams<{ matchId: string }>();
-  const { match, loading, error } = useMatch(matchId || null);
+  const { match, loading, error } = useMatch(matchId || null, true); // Enable Firebase sync for viewers
   const { isFullscreen, toggleFullscreen } = useFullscreen();
 
   if (loading) {

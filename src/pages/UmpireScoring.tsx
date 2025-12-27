@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
@@ -8,7 +8,8 @@ import { RunButtons } from '@/components/RunButtons';
 import { ExtraButtons } from '@/components/ExtraButtons';
 import { WicketTypeSelector } from '@/components/WicketTypeSelector';
 import { RosterManager } from '@/components/RosterManager';
-import { useMatch, recordBall, selectNewBatsman, changeBowler, addPlayerDuringMatch, deletePlayerDuringMatch } from '@/hooks/useMatch';
+import { useMatch, recordBall, selectNewBatsman, changeBowler, addPlayerDuringMatch, deletePlayerDuringMatch, enableMatchSharing } from '@/hooks/useMatch';
+import { isFirebaseEnabled } from '@/lib/firebase';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { toast } from '@/hooks/use-toast';
 import { Share2, Eye, Maximize, Minimize, Users } from 'lucide-react';
@@ -27,6 +28,21 @@ const UmpireScoring = () => {
   const [showRosterModal, setShowRosterModal] = useState<'A' | 'B' | null>(null);
   const [pendingWicket, setPendingWicket] = useState(false);
   const [processing, setProcessing] = useState(false);
+  const [lastOverHandled, setLastOverHandled] = useState(0);
+
+  // Auto-open bowler modal when over is complete
+  useEffect(() => {
+    if (match && match.status === 'live') {
+      const battingTeam = match.battingTeam === 'A' ? match.teamA : match.teamB;
+      const currentOverNumber = Math.floor(battingTeam.totalBalls / 6);
+      const isOverComplete = battingTeam.totalBalls > 0 && battingTeam.totalBalls % 6 === 0;
+      
+      if (isOverComplete && !showBowlerModal && !processing && !pendingWicket && currentOverNumber > lastOverHandled) {
+        setShowBowlerModal(true);
+        setLastOverHandled(currentOverNumber);
+      }
+    }
+  }, [match?.teamA.totalBalls, match?.teamB.totalBalls, match?.status, showBowlerModal, processing, pendingWicket, lastOverHandled]);
 
   const handleRun = async (runs: number) => {
     if (!matchId || processing) return;
@@ -127,18 +143,38 @@ const UmpireScoring = () => {
     navigate(`/match/${matchId}/innings-break`);
   };
 
-  const shareMatch = () => {
+  const shareMatch = async () => {
+    if (!matchId) return;
+    
     const url = `${window.location.origin}/match/${matchId}/view`;
+    
+    // Enable Firebase sharing if configured
+    if (isFirebaseEnabled()) {
+      const success = await enableMatchSharing(matchId);
+      if (!success) {
+        toast({
+          title: 'Sharing Error',
+          description: 'Could not enable real-time sharing. Check Firebase config.',
+          variant: 'destructive',
+        });
+        return;
+      }
+    }
+    
+    // Share or copy link
     if (navigator.share) {
       navigator.share({
         title: match?.name || 'Cricket Match',
+        text: 'Watch live cricket match scores',
         url: url,
       });
     } else {
       navigator.clipboard.writeText(url);
       toast({
         title: 'Link Copied',
-        description: 'Share this link with spectators',
+        description: isFirebaseEnabled() 
+          ? 'Share this link - it updates in real-time!'
+          : 'Share this link (works on same device only)',
       });
     }
   };
@@ -295,15 +331,6 @@ const UmpireScoring = () => {
 
         {/* Scoring Controls */}
         <div className="mt-auto pt-6 space-y-4">
-          {isOverComplete && (
-            <button
-              onClick={() => setShowBowlerModal(true)}
-              className="w-full tap-button bg-accent text-accent-foreground py-4 font-bold"
-            >
-              Over Complete - Select New Bowler
-            </button>
-          )}
-          
           <RunButtons 
             onRun={handleRun} 
             disabled={processing || pendingWicket} 

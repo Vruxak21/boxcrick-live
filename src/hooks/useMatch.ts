@@ -1,9 +1,30 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Match, Player, Ball, WicketType, BowlerStats, FallOfWicket } from '@/types/match';
+import { syncMatchToFirebase, getMatchFromFirebase, subscribeToMatch } from '@/lib/firebaseSync';
+import { isFirebaseEnabled } from '@/lib/firebase';
 
 const generateId = () => Math.random().toString(36).substring(2, 15);
 const STORAGE_KEY = 'boxcrick_matches';
+const SHARED_MATCHES_KEY = 'boxcrick_shared_matches';
 const CLEANUP_DAYS = 7;
+
+// Track which matches are shared (should sync to Firebase)
+const getSharedMatches = (): Set<string> => {
+  try {
+    const data = localStorage.getItem(SHARED_MATCHES_KEY);
+    return data ? new Set(JSON.parse(data)) : new Set();
+  } catch { return new Set(); }
+};
+
+const isMatchShared = (matchId: string): boolean => {
+  return getSharedMatches().has(matchId);
+};
+
+const markMatchAsShared = (matchId: string) => {
+  const shared = getSharedMatches();
+  shared.add(matchId);
+  localStorage.setItem(SHARED_MATCHES_KEY, JSON.stringify([...shared]));
+};
 
 const getStoredMatches = (): Record<string, Match> => {
   try {
@@ -17,6 +38,27 @@ const saveMatch = (match: Match) => {
   matches[match.id] = match;
   localStorage.setItem(STORAGE_KEY, JSON.stringify(matches));
   window.dispatchEvent(new CustomEvent('matchUpdate', { detail: { matchId: match.id } }));
+  
+  // Auto-sync to Firebase if match is shared
+  if (isMatchShared(match.id) && isFirebaseEnabled()) {
+    syncMatchToFirebase(match).catch(console.error);
+  }
+};
+
+// Enable Firebase sharing for a match
+export const enableMatchSharing = async (matchId: string): Promise<boolean> => {
+  const matches = getStoredMatches();
+  const match = matches[matchId];
+  if (!match) return false;
+  
+  if (!isFirebaseEnabled()) {
+    console.error('Firebase not configured. Cannot enable sharing.');
+    return false;
+  }
+  
+  // Mark as shared and sync to Firebase
+  markMatchAsShared(matchId);
+  return await syncMatchToFirebase(match);
 };
 
 // Auto-cleanup old completed matches
@@ -83,30 +125,73 @@ export const getLatestUnfinishedMatch = async (): Promise<Match | null> => {
   return unfinished[0] || null;
 };
 
-export const useMatch = (matchId: string | null) => {
+export const useMatch = (matchId: string | null, enableFirebaseSync = false) => {
   const [match, setMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const loadMatch = useCallback(() => {
+  const loadMatch = useCallback(async () => {
     if (!matchId) { setLoading(false); return; }
+    
+    // Try localStorage first
     const matches = getStoredMatches();
     const foundMatch = matches[matchId];
-    if (foundMatch) { setMatch(foundMatch); setError(null); }
-    else { setError('Match not found'); }
-    setLoading(false);
-  }, [matchId]);
+    
+    if (foundMatch) {
+      setMatch(foundMatch);
+      setError(null);
+      setLoading(false);
+    } else if (enableFirebaseSync) {
+      // Try Firebase if not found locally
+      try {
+        const firebaseMatch = await getMatchFromFirebase(matchId);
+        if (firebaseMatch) {
+          setMatch(firebaseMatch);
+          setError(null);
+        } else {
+          setError('Match not found');
+        }
+      } catch (err) {
+        setError('Match not found');
+      }
+      setLoading(false);
+    } else {
+      setError('Match not found');
+      setLoading(false);
+    }
+  }, [matchId, enableFirebaseSync]);
 
   useEffect(() => {
     loadMatch();
+    
+    // Set up Firebase real-time listener for shared matches
+    let unsubscribe: (() => void) | null = null;
+    if (matchId && enableFirebaseSync && isFirebaseEnabled()) {
+      unsubscribe = subscribeToMatch(
+        matchId,
+        (updatedMatch) => {
+          setMatch(updatedMatch);
+          // Also save to localStorage for offline access
+          const matches = getStoredMatches();
+          matches[matchId] = updatedMatch;
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(matches));
+        },
+        (error) => {
+          console.error('Firebase subscription error:', error);
+        }
+      );
+    }
+    
     const handleUpdate = (e: CustomEvent) => { if (e.detail.matchId === matchId) loadMatch(); };
     window.addEventListener('matchUpdate', handleUpdate as EventListener);
     window.addEventListener('storage', loadMatch);
+    
     return () => {
       window.removeEventListener('matchUpdate', handleUpdate as EventListener);
       window.removeEventListener('storage', loadMatch);
+      if (unsubscribe) unsubscribe();
     };
-  }, [matchId, loadMatch]);
+  }, [matchId, loadMatch, enableFirebaseSync]);
 
   const updateMatch = useCallback(async (updates: Partial<Match>) => {
     if (!matchId || !match) return;
@@ -158,7 +243,7 @@ export const addJokerPlayer = async (matchId: string, jokerName: string) => {
   const jokerId = generateId();
   const jokerPlayer: Player = {
     id: jokerId,
-    name: jokerName + ' (Joker)',
+    name: jokerName,
     runs: 0,
     ballsFaced: 0,
     fours: 0,
@@ -167,11 +252,11 @@ export const addJokerPlayer = async (matchId: string, jokerName: string) => {
     isJoker: true,
   };
   
-  // Add joker to both teams
+  // Add the same joker player object to both teams (same ID)
   saveMatch({
     ...match,
     teamA: { ...match.teamA, players: [...match.teamA.players, { ...jokerPlayer }] },
-    teamB: { ...match.teamB, players: [...match.teamB.players, { ...jokerPlayer, id: jokerId + '_b' }] },
+    teamB: { ...match.teamB, players: [...match.teamB.players, { ...jokerPlayer }] },
     jokerPlayerId: jokerId,
     updatedAt: Date.now(),
   });
@@ -493,6 +578,45 @@ export const addPlayersToTeam = async (matchId: string, team: 'A' | 'B', playerN
   saveMatch({
     ...match,
     [teamKey]: { ...match[teamKey], players: [...existingPlayers, ...newPlayers] },
+    updatedAt: Date.now(),
+  });
+};
+
+export const updateTeamPlayers = async (matchId: string, team: 'A' | 'B', playerNames: string[]) => {
+  const matches = getStoredMatches();
+  const match = matches[matchId];
+  if (!match) return;
+  
+  const teamKey = team === 'A' ? 'teamA' : 'teamB';
+  const existingPlayers = match[teamKey].players;
+  
+  // Keep stats for existing players if name matches
+  const updatedPlayers: Player[] = playerNames.map(name => {
+    const existing = existingPlayers.find(p => p.name === name && !p.isJoker);
+    if (existing) {
+      return existing; // Keep existing player with stats
+    }
+    // Create new player
+    return {
+      id: generateId(),
+      name,
+      runs: 0,
+      ballsFaced: 0,
+      fours: 0,
+      sixes: 0,
+      isOut: false,
+    };
+  });
+  
+  // Keep joker if exists
+  const joker = existingPlayers.find(p => p.isJoker);
+  if (joker) {
+    updatedPlayers.push(joker);
+  }
+  
+  saveMatch({
+    ...match,
+    [teamKey]: { ...match[teamKey], players: updatedPlayers },
     updatedAt: Date.now(),
   });
 };

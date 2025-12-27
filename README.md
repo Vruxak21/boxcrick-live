@@ -1,53 +1,107 @@
-# Welcome to your Lovable project
+# Box Cricket Live - Match Management App
 
-## Project info
+A real-time cricket match scoring and management application for Box Cricket and Turf matches.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Features
 
-## How can I edit this code?
+- ✅ Live match scoring with real-time updates
+- ✅ Support for both Tennis and Leather ball matches  
+- ✅ Team & Player management with Joker support
+- ✅ Detailed player statistics (runs, balls, strike rate)
+- ✅ Bowler statistics (overs, wickets, economy)
+- ✅ **Cross-device live sharing** (with Firebase)
+- ✅ Mobile-first responsive design
+- ✅ Works offline with localStorage
 
-There are several ways of editing your application.
+## Quick Start
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
+### Local Development (No sharing)
 
 ```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
+# Install dependencies
+bun install
+# or
+npm install
 
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
+# Start development server
+bun run dev
+# or
 npm run dev
 ```
 
-**Edit a file directly in GitHub**
+Visit `http://localhost:8080` to use the app locally.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Enable Real-time Sharing (Optional)
 
-**Use GitHub Codespaces**
+To enable cross-device real-time match sharing:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
+### 1. Create Firebase Project
+
+1. Go to [Firebase Console](https://console.firebase.google.com/)
+2. Create a new project
+3. Enable **Firestore Database** (Start in production mode)
+4. Go to Project Settings → General → Your apps
+5. Add a Web app and copy the config
+
+### 2. Add Firebase Config
+
+Create a `.env` file in the project root:
+
+```env
+VITE_FIREBASE_API_KEY=your_api_key
+VITE_FIREBASE_AUTH_DOMAIN=your-project.firebaseapp.com
+VITE_FIREBASE_PROJECT_ID=your-project-id
+VITE_FIREBASE_STORAGE_BUCKET=your-project.appspot.com
+VITE_FIREBASE_MESSAGING_SENDER_ID=your_sender_id
+VITE_FIREBASE_APP_ID=your_app_id
+```
+
+### 3. Configure Firestore Rules
+
+In Firebase Console → Firestore Database → Rules:
+
+```
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /matches/{matchId} {
+      allow read: if true;  // Anyone can read shared matches
+      allow write: if true; // Anyone can update (for umpire scoring)
+    }
+  }
+}
+```
+
+### 4. Restart Dev Server
+
+```sh
+bun run dev
+```
+
+Now when you click **Share** in a live match:
+- ✅ Match syncs to Firebase
+- ✅ Share link works on any device
+- ✅ Real-time updates for all viewers
+- ✅ **Completely FREE** (Firebase free tier is generous)
+
+## How It Works
+
+**Without Firebase**: 
+- Matches stored in browser localStorage
+- Share links only work on same device
+
+**With Firebase**:
+- Matches stored in both localStorage AND Firestore
+- Share links work on any device globally
+- All viewers see real-time score updates
+
+## Build for Production
+
+```sh
+bun run build
+# or
+npm run build
+```
 - Edit files directly within the Codespace and commit and push your changes once you're done.
 
 ## What technologies are used for this project?
