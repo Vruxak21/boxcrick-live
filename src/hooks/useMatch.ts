@@ -59,7 +59,12 @@ const saveMatch = (match: Match) => {
   window.dispatchEvent(new CustomEvent('matchUpdate', { detail: { matchId: match.id } }));
   
   // Auto-sync to Firebase if match is shared (happens on every ball)
-  if (isMatchShared(match.id) && isFirebaseEnabled()) {
+  const shared = isMatchShared(match.id);
+  const fbEnabled = isFirebaseEnabled();
+  
+  console.log(`🔍 Save match ${match.id}: shared=${shared}, firebaseEnabled=${fbEnabled}`);
+  
+  if (shared && fbEnabled) {
     syncMatchToFirebase(match).catch((error) => {
       console.error('❌ Failed to sync match to Firebase:', error);
     });

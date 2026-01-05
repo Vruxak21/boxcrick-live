@@ -4,6 +4,29 @@ import { Match } from '@/types/match';
 
 const COLLECTION_NAME = 'matches';
 
+// Remove undefined values from object (Firebase doesn't allow undefined)
+const sanitizeForFirebase = (obj: any): any => {
+  if (obj === null || obj === undefined) {
+    return null;
+  }
+  
+  if (Array.isArray(obj)) {
+    return obj.map(item => sanitizeForFirebase(item));
+  }
+  
+  if (typeof obj === 'object') {
+    const sanitized: any = {};
+    for (const [key, value] of Object.entries(obj)) {
+      if (value !== undefined) {
+        sanitized[key] = sanitizeForFirebase(value);
+      }
+    }
+    return sanitized;
+  }
+  
+  return obj;
+};
+
 // Sync match to Firebase for sharing
 export const syncMatchToFirebase = async (match: Match): Promise<boolean> => {
   if (!isFirebaseEnabled()) {
@@ -13,8 +36,10 @@ export const syncMatchToFirebase = async (match: Match): Promise<boolean> => {
 
   try {
     console.log('🔄 Syncing match to Firebase:', match.id);
+    // Remove undefined values before syncing (Firebase doesn't support undefined)
+    const sanitizedMatch = sanitizeForFirebase(match);
     // Use merge for faster updates (only sends changed fields)
-    await setDoc(doc(db!, COLLECTION_NAME, match.id), match, { merge: true });
+    await setDoc(doc(db!, COLLECTION_NAME, match.id), sanitizedMatch, { merge: true });
     console.log('✅ Match synced successfully:', match.id);
     return true;
   } catch (error) {
