@@ -58,9 +58,11 @@ const saveMatch = (match: Match) => {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(matches));
   window.dispatchEvent(new CustomEvent('matchUpdate', { detail: { matchId: match.id } }));
   
-  // Auto-sync to Firebase if match is shared
+  // Auto-sync to Firebase if match is shared (happens on every ball)
   if (isMatchShared(match.id) && isFirebaseEnabled()) {
-    syncMatchToFirebase(match).catch(console.error);
+    syncMatchToFirebase(match).catch((error) => {
+      console.error('❌ Failed to sync match to Firebase:', error);
+    });
   }
 };
 
