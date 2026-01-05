@@ -8,7 +8,8 @@ import { BowlerStats, FallOfWicket } from '@/types/match';
 const MatchResult = () => {
   const { matchId } = useParams<{ matchId: string }>();
   const navigate = useNavigate();
-  const { match, loading, error } = useMatch(matchId || null);
+  // Enable Firebase sync to support viewers
+  const { match, loading, error } = useMatch(matchId || null, true);
   const [expandedTeam, setExpandedTeam] = useState<'A' | 'B' | null>('A');
 
   const handleRestart = async () => {

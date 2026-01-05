@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { BatsmanCard } from '@/components/BatsmanCard';
@@ -15,6 +15,14 @@ const ViewerScoreboard = () => {
   const [showUpdatePulse, setShowUpdatePulse] = useState(false);
   const [lastBallCount, setLastBallCount] = useState(0);
   const [isConnected, setIsConnected] = useState(true);
+  const navigate = useNavigate();
+
+  // Redirect to result page if match is completed
+  useEffect(() => {
+    if (match && match.status === 'completed') {
+      navigate(`/match/${matchId}/result`);
+    }
+  }, [match?.status, matchId, navigate]);
 
   // Monitor connection status
   useEffect(() => {

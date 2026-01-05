@@ -28,6 +28,15 @@ const CreateMatch = () => {
       return;
     }
 
+    if (formData.overs < 1 || formData.overs > 50) {
+      toast({
+        title: 'Invalid Overs',
+        description: 'Please enter overs between 1 and 50',
+        variant: 'destructive',
+      });
+      return;
+    }
+
     setLoading(true);
     try {
       const matchId = await createMatch({
@@ -95,22 +104,15 @@ const CreateMatch = () => {
             <label className="text-sm font-medium text-muted-foreground">
               Number of Overs
             </label>
-            <div className="grid grid-cols-4 gap-2">
-              {[4, 5, 6, 8, 10, 12, 15, 20].map((over) => (
-                <button
-                  key={over}
-                  type="button"
-                  onClick={() => setFormData({ ...formData, overs: over })}
-                  className={`h-12 rounded-xl font-semibold transition-all ${
-                    formData.overs === over
-                      ? 'bg-primary text-primary-foreground'
-                      : 'bg-secondary text-secondary-foreground'
-                  }`}
-                >
-                  {over}
-                </button>
-              ))}
-            </div>
+            <input
+              type="number"
+              min="1"
+              max="50"
+              value={formData.overs}
+              onChange={(e) => setFormData({ ...formData, overs: parseInt(e.target.value) || 1 })}
+              placeholder="Enter overs"
+              className="w-full h-14 px-4 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
+            />
           </div>
 
           {/* Ball Type */}
