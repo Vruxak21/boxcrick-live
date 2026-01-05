@@ -373,7 +373,7 @@ const UmpireScoring = () => {
         </div>
 
         {/* Scoring Controls */}
-        <div className="mt-auto pt-6 space-y-4">
+        <div className="mt-auto pt-6 space-y-4 mb-10">
           <RunButtons 
             onRun={handleRun} 
             disabled={processing || pendingWicket} 
