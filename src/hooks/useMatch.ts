@@ -448,13 +448,17 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
     }
   }
   
-  // Handle strike rotation
-  const shouldChangeStrike = (runs % 2 === 1) && !validWicket && extraType !== 'wide';
+  // Handle strike rotation (skip in single batsman mode)
+  const shouldChangeStrike = !match.singleBatsmanMode && (runs % 2 === 1) && !validWicket && extraType !== 'wide';
   const overComplete = newTotalBalls % 6 === 0 && newTotalBalls > 0 && newTotalBalls !== battingTeam.totalBalls;
   let [newStriker, newNonStriker] = [match.currentBatsmen.striker, match.currentBatsmen.nonStriker];
-  if (shouldChangeStrike) [newStriker, newNonStriker] = [newNonStriker, newStriker];
-  if (overComplete && !shouldChangeStrike) [newStriker, newNonStriker] = [newNonStriker, newStriker];
-  if (overComplete && shouldChangeStrike) {} // They cancel out
+  
+  // In single batsman mode, striker never changes
+  if (!match.singleBatsmanMode) {
+    if (shouldChangeStrike) [newStriker, newNonStriker] = [newNonStriker, newStriker];
+    if (overComplete && !shouldChangeStrike) [newStriker, newNonStriker] = [newNonStriker, newStriker];
+    if (overComplete && shouldChangeStrike) {} // They cancel out
+  }
   
   const ball: Ball = {
     id: generateId(),

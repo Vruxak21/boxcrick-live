@@ -94,6 +94,7 @@ export interface Match {
   updatedAt: number;
   isFreeHit?: boolean;
   jokerPlayerId?: string;
+  singleBatsmanMode?: boolean;
   fallOfWickets: {
     teamA: FallOfWicket[];
     teamB: FallOfWicket[];

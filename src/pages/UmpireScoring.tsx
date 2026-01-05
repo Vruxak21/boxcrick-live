@@ -12,7 +12,7 @@ import { useMatch, recordBall, selectNewBatsman, changeBowler, addPlayerDuringMa
 import { isFirebaseEnabled } from '@/lib/firebase';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { toast } from '@/hooks/use-toast';
-import { Share2, Eye, Maximize, Minimize, Users } from 'lucide-react';
+import { Share2, Eye, Maximize, Minimize, Users, User } from 'lucide-react';
 import { WicketType } from '@/types/match';
 
 const UmpireScoring = () => {
@@ -141,6 +141,19 @@ const UmpireScoring = () => {
   const handleStartSecondInnings = () => {
     if (!matchId) return;
     navigate(`/match/${matchId}/innings-break`);
+  };
+
+  const toggleSingleBatsmanMode = async () => {
+    if (!matchId || !match) return;
+    const matches = JSON.parse(localStorage.getItem('boxcrick_matches') || '{}');
+    const updatedMatch = {
+      ...match,
+      singleBatsmanMode: !match.singleBatsmanMode,
+      updatedAt: Date.now(),
+    };
+    matches[matchId] = updatedMatch;
+    localStorage.setItem('boxcrick_matches', JSON.stringify(matches));
+    window.dispatchEvent(new CustomEvent('matchUpdate', { detail: { matchId } }));
   };
 
   const shareMatch = async () => {
@@ -323,6 +336,19 @@ const UmpireScoring = () => {
           </button>
         </div>
 
+        {/* Single Batsman Mode Toggle */}
+        <button
+          onClick={toggleSingleBatsmanMode}
+          className={`w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-colors ${
+            match.singleBatsmanMode
+              ? 'bg-accent text-accent-foreground'
+              : 'bg-muted text-muted-foreground'
+          }`}
+        >
+          <User className="w-4 h-4" />
+          {match.singleBatsmanMode ? 'Single Batsman Mode: ON' : 'Single Batsman Mode: OFF'}
+        </button>
+
         {/* Free Hit Indicator */}
         {match.isFreeHit && (
           <div className="mt-3 bg-success/20 border border-success/40 rounded-xl p-3 text-center">
@@ -335,7 +361,7 @@ const UmpireScoring = () => {
           {striker && (
             <BatsmanCard player={striker} isStriker />
           )}
-          {nonStriker && (
+          {!match.singleBatsmanMode && nonStriker && (
             <BatsmanCard player={nonStriker} />
           )}
           <button
