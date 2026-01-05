@@ -7,16 +7,18 @@ const COLLECTION_NAME = 'matches';
 // Sync match to Firebase for sharing
 export const syncMatchToFirebase = async (match: Match): Promise<boolean> => {
   if (!isFirebaseEnabled()) {
-    console.warn('Firebase not configured. Sharing disabled.');
+    console.warn('⚠️ Firebase not configured. Sharing disabled.');
     return false;
   }
 
   try {
+    console.log('🔄 Syncing match to Firebase:', match.id);
     // Use merge for faster updates (only sends changed fields)
     await setDoc(doc(db!, COLLECTION_NAME, match.id), match, { merge: true });
+    console.log('✅ Match synced successfully:', match.id);
     return true;
   } catch (error) {
-    console.error('Error syncing match to Firebase:', error);
+    console.error('❌ Error syncing match to Firebase:', error);
     return false;
   }
 };
@@ -48,25 +50,30 @@ export const subscribeToMatch = (
   onError?: (error: Error) => void
 ): Unsubscribe | null => {
   if (!isFirebaseEnabled()) {
+    console.warn('⚠️ Firebase not enabled. Real-time updates disabled.');
     return null;
   }
 
   try {
+    console.log('🎧 Setting up real-time listener for match:', matchId);
     const docRef = doc(db!, COLLECTION_NAME, matchId);
     return onSnapshot(
       docRef,
       (doc) => {
         if (doc.exists()) {
+          console.log('📡 Received real-time update for match:', matchId);
           onUpdate(doc.data() as Match);
+        } else {
+          console.warn('⚠️ Match document not found:', matchId);
         }
       },
       (error) => {
-        console.error('Error listening to match updates:', error);
+        console.error('❌ Error listening to match updates:', error);
         onError?.(error);
       }
     );
   } catch (error) {
-    console.error('Error setting up match subscription:', error);
+    console.error('❌ Error setting up match subscription:', error);
     return null;
   }
 };

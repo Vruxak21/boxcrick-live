@@ -18,9 +18,17 @@ let db;
 try {
   app = initializeApp(firebaseConfig);
   db = getFirestore(app);
+  console.log('✅ Firebase initialized successfully:', firebaseConfig.projectId);
 } catch (error) {
-  console.warn('Firebase initialization failed. Using localStorage only mode.', error);
+  console.error('❌ Firebase initialization failed:', error);
+  console.warn('Using localStorage only mode.');
 }
 
 export { db };
-export const isFirebaseEnabled = () => !!db && import.meta.env.VITE_FIREBASE_PROJECT_ID !== undefined;
+export const isFirebaseEnabled = () => {
+  const enabled = !!db && import.meta.env.VITE_FIREBASE_PROJECT_ID !== undefined;
+  if (!enabled) {
+    console.warn('Firebase is not enabled. Check your .env configuration.');
+  }
+  return enabled;
+};

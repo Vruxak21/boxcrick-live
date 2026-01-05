@@ -6,7 +6,26 @@ import { isFirebaseEnabled } from '@/lib/firebase';
 const generateId = () => Math.random().toString(36).substring(2, 15);
 const STORAGE_KEY = 'boxcrick_matches';
 const SHARED_MATCHES_KEY = 'boxcrick_shared_matches';
+const MY_MATCHES_KEY = 'boxcrick_my_matches'; // Track matches created on this device
 const CLEANUP_DAYS = 7;
+
+// Track which matches were created on this device
+const getMyMatches = (): Set<string> => {
+  try {
+    const data = localStorage.getItem(MY_MATCHES_KEY);
+    return data ? new Set(JSON.parse(data)) : new Set();
+  } catch { return new Set(); }
+};
+
+const markMatchAsMine = (matchId: string) => {
+  const myMatches = getMyMatches();
+  myMatches.add(matchId);
+  localStorage.setItem(MY_MATCHES_KEY, JSON.stringify([...myMatches]));
+};
+
+const isMyMatch = (matchId: string): boolean => {
+  return getMyMatches().has(matchId);
+};
 
 // Track which matches are shared (should sync to Firebase)
 const getSharedMatches = (): Set<string> => {
@@ -52,13 +71,18 @@ export const enableMatchSharing = async (matchId: string): Promise<boolean> => {
   if (!match) return false;
   
   if (!isFirebaseEnabled()) {
-    console.error('Firebase not configured. Cannot enable sharing.');
+    console.error('❌ Firebase not configured. Cannot enable sharing.');
     return false;
   }
   
+  console.log('🚀 Enabling sharing for match:', matchId);
   // Mark as shared and sync to Firebase
   markMatchAsShared(matchId);
-  return await syncMatchToFirebase(match);
+  const success = await syncMatchToFirebase(match);
+  if (success) {
+    console.log('✅ Match sharing enabled successfully');
+  }
+  return success;
 };
 
 // Auto-cleanup old completed matches
@@ -113,14 +137,21 @@ export const createMatch = async (matchData: Partial<Match>): Promise<string> =>
     bowlerStats: { teamA: {}, teamB: {} },
   };
   saveMatch(newMatch);
+  markMatchAsMine(matchId); // Track that this match was created on this device
   return matchId;
 };
 
 export const getLatestUnfinishedMatch = async (): Promise<Match | null> => {
   cleanupOldMatches();
   const matches = getStoredMatches();
+  const myMatches = getMyMatches();
+  
+  // Only show unfinished matches that were created on this device
   const unfinished = Object.values(matches)
-    .filter(m => ['created', 'toss', 'setup', 'live', 'innings_break'].includes(m.status))
+    .filter(m => 
+      ['created', 'toss', 'setup', 'live', 'innings_break'].includes(m.status) &&
+      myMatches.has(m.id) // Only show my matches
+    )
     .sort((a, b) => b.updatedAt - a.updatedAt);
   return unfinished[0] || null;
 };
