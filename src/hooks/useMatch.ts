@@ -23,7 +23,7 @@ const markMatchAsMine = (matchId: string) => {
   localStorage.setItem(MY_MATCHES_KEY, JSON.stringify([...myMatches]));
 };
 
-const isMyMatch = (matchId: string): boolean => {
+export const isMyMatch = (matchId: string): boolean => {
   return getMyMatches().has(matchId);
 };
 

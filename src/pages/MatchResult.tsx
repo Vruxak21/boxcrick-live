@@ -1,7 +1,7 @@
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { useMatch, restartMatch } from '@/hooks/useMatch';
-import { Trophy, Home, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { useMatch, restartMatch, isMyMatch } from '@/hooks/useMatch';
+import { Trophy, Home, RotateCcw, ChevronDown, ChevronUp, Plus } from 'lucide-react';
 import { useState } from 'react';
 import { BowlerStats, FallOfWicket } from '@/types/match';
 
@@ -11,6 +11,7 @@ const MatchResult = () => {
   // Enable Firebase sync to support viewers
   const { match, loading, error } = useMatch(matchId || null, true);
   const [expandedTeam, setExpandedTeam] = useState<'A' | 'B' | null>('A');
+  const isCreator = matchId ? isMyMatch(matchId) : false;
 
   const handleRestart = async () => {
     if (!matchId) return;
@@ -248,13 +249,32 @@ const MatchResult = () => {
 
         {/* Actions */}
         <div className="space-y-3">
-          <button
-            onClick={handleRestart}
-            className="w-full tap-button bg-accent text-accent-foreground text-lg py-5 font-bold flex items-center justify-center gap-2"
-          >
-            <RotateCcw className="w-5 h-5" />
-            Restart Match (Same Teams)
-          </button>
+          {isCreator ? (
+            <>
+              <button
+                onClick={handleRestart}
+                className="w-full tap-button bg-accent text-accent-foreground text-lg py-5 font-bold flex items-center justify-center gap-2"
+              >
+                <RotateCcw className="w-5 h-5" />
+                Restart Match (Same Teams)
+              </button>
+              <button
+                onClick={() => navigate('/create')}
+                className="w-full tap-button bg-secondary text-secondary-foreground text-lg py-5 font-bold flex items-center justify-center gap-2"
+              >
+                <Plus className="w-5 h-5" />
+                Create New Match
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={() => navigate('/create')}
+              className="w-full tap-button bg-primary text-primary-foreground text-lg py-5 font-bold flex items-center justify-center gap-2"
+            >
+              <Plus className="w-5 h-5" />
+              Create New Match
+            </button>
+          )}
           <button
             onClick={() => navigate('/')}
             className="w-full tap-button bg-primary text-primary-foreground text-lg py-5 font-bold flex items-center justify-center gap-2"

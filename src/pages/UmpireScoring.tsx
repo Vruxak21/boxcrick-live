@@ -203,6 +203,16 @@ const UmpireScoring = () => {
     return null;
   }
 
+  if (match.status === 'created') {
+    navigate(`/match/${matchId}/toss`);
+    return null;
+  }
+
+  if (match.status === 'toss' || match.status === 'setup') {
+    navigate(`/match/${matchId}/setup`);
+    return null;
+  }
+
   if (match.status === 'innings_break') {
     return (
       <div className="min-h-screen bg-background">
@@ -229,9 +239,16 @@ const UmpireScoring = () => {
     );
   }
 
+  // If status is not 'live', should have been redirected above
   if (match.status !== 'live') {
-    navigate(`/match/${matchId}/setup`);
-    return null;
+    return (
+      <div className="min-h-screen bg-background">
+        <Header title="Scoring" showBack />
+        <div className="container px-4 py-8 text-center">
+          <p className="text-destructive">Invalid match status</p>
+        </div>
+      </div>
+    );
   }
 
   const battingTeam = match.battingTeam === 'A' ? match.teamA : match.teamB;
