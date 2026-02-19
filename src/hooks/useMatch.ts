@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Match, Player, Ball, WicketType, BowlerStats, FallOfWicket } from '@/types/match';
+import { Match, Player, Ball, WicketType, BowlerStats, FallOfWicket, MatchSnapshot } from '@/types/match';
 import { syncMatchToFirebase, getMatchFromFirebase, subscribeToMatch } from '@/lib/firebaseSync';
 import { isFirebaseEnabled } from '@/lib/firebase';
 
@@ -512,6 +512,11 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
   // Determine if next ball is free hit
   const nextIsFreeHit = setFreeHit ? true : (wasFreeHit && extraType === 'noball' ? true : false);
   
+  // Snapshot current state for undo (strip existing history to avoid nesting bloat)
+  const { history: _prevHistory, ...matchWithoutHistory } = match as Match & { history?: MatchSnapshot[] };
+  const currentHistory: MatchSnapshot[] = match.history || [];
+  const newHistory: MatchSnapshot[] = [...currentHistory.slice(-9), matchWithoutHistory as MatchSnapshot];
+
   saveMatch({
     ...match,
     [battingTeamKey]: {
@@ -530,6 +535,7 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
     isFreeHit: extraType === 'dead' ? match.isFreeHit : nextIsFreeHit,
     fallOfWickets,
     bowlerStats,
+    history: newHistory,
     updatedAt: Date.now(),
   });
 };
@@ -545,6 +551,18 @@ const getHowOutText = (wicketType?: WicketType, fielder?: string, bowlerName?: s
     case 'hitwicket': return `hit wicket b ${bowlerName || ''}`;
     default: return 'out';
   }
+};
+
+export const undoBall = async (matchId: string) => {
+  const matches = getStoredMatches();
+  const match = matches[matchId];
+  if (!match || !match.history || match.history.length === 0) return;
+
+  const history = [...match.history];
+  const previousSnapshot = history.pop()!; // last saved state before the ball
+
+  // Restore previous state with shortened history
+  saveMatch({ ...previousSnapshot, history, id: matchId } as Match);
 };
 
 export const selectNewBatsman = async (matchId: string, newBatsmanId: string) => {

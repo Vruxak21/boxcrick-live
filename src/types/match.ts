@@ -66,6 +66,9 @@ export interface FallOfWicket {
   wicketNumber: number;
 }
 
+// Snapshot of match state before a ball — no nested history to avoid bloat
+export type MatchSnapshot = Omit<Match, 'history'>;
+
 export interface Match {
   id: string;
   name: string;
@@ -95,6 +98,7 @@ export interface Match {
   isFreeHit?: boolean;
   jokerPlayerId?: string;
   singleBatsmanMode?: boolean;
+  history?: MatchSnapshot[];
   fallOfWickets: {
     teamA: FallOfWicket[];
     teamB: FallOfWicket[];

@@ -8,11 +8,12 @@ import { RunButtons } from '@/components/RunButtons';
 import { ExtraButtons } from '@/components/ExtraButtons';
 import { WicketTypeSelector } from '@/components/WicketTypeSelector';
 import { RosterManager } from '@/components/RosterManager';
-import { useMatch, recordBall, selectNewBatsman, changeBowler, addPlayerDuringMatch, deletePlayerDuringMatch, enableMatchSharing } from '@/hooks/useMatch';
+import { LiveScorecard } from '@/components/LiveScorecard';
+import { useMatch, recordBall, undoBall, selectNewBatsman, changeBowler, addPlayerDuringMatch, deletePlayerDuringMatch, enableMatchSharing } from '@/hooks/useMatch';
 import { isFirebaseEnabled } from '@/lib/firebase';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { toast } from '@/hooks/use-toast';
-import { Share2, Eye, Maximize, Minimize, Users, User } from 'lucide-react';
+import { Share2, Eye, Maximize, Minimize, Users, User, Undo2 } from 'lucide-react';
 import { WicketType } from '@/types/match';
 
 const UmpireScoring = () => {
@@ -29,6 +30,7 @@ const UmpireScoring = () => {
   const [pendingWicket, setPendingWicket] = useState(false);
   const [processing, setProcessing] = useState(false);
   const [lastOverHandled, setLastOverHandled] = useState(0);
+  const [activeTab, setActiveTab] = useState<'live' | 'scorecard'>('live');
 
   // Auto-open bowler modal when over is complete
   useEffect(() => {
@@ -43,6 +45,19 @@ const UmpireScoring = () => {
       }
     }
   }, [match?.teamA.totalBalls, match?.teamB.totalBalls, match?.status, showBowlerModal, processing, pendingWicket, lastOverHandled]);
+
+  const handleUndo = async () => {
+    if (!matchId || processing) return;
+    if (!match?.history || match.history.length === 0) return;
+    setProcessing(true);
+    try {
+      await undoBall(matchId);
+      toast({ title: 'Undone', description: 'Last ball has been undone' });
+    } catch (error) {
+      console.error('Error undoing ball:', error);
+    }
+    setProcessing(false);
+  };
 
   const handleRun = async (runs: number) => {
     if (!matchId || processing) return;
@@ -336,41 +351,77 @@ const UmpireScoring = () => {
           </button>
         </div>
 
-        {/* Single Batsman Mode Toggle */}
-        <button
-          onClick={toggleSingleBatsmanMode}
-          className={`w-full mt-2 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-colors ${
-            match.singleBatsmanMode
-              ? 'bg-accent text-accent-foreground'
-              : 'bg-muted text-muted-foreground'
-          }`}
-        >
-          <User className="w-4 h-4" />
-          {match.singleBatsmanMode ? 'Single Batsman Mode: ON' : 'Single Batsman Mode: OFF'}
-        </button>
-
-        {/* Free Hit Indicator */}
-        {match.isFreeHit && (
-          <div className="mt-3 bg-success/20 border border-success/40 rounded-xl p-3 text-center">
-            <span className="text-lg font-bold text-success">🎯 FREE HIT</span>
-          </div>
-        )}
-
-        {/* Current Players */}
-        <div className="mt-4 space-y-3">
-          {striker && (
-            <BatsmanCard player={striker} isStriker />
-          )}
-          {!match.singleBatsmanMode && nonStriker && (
-            <BatsmanCard player={nonStriker} />
-          )}
+        {/* Tab Toggle */}
+        <div className="flex rounded-xl bg-muted p-1 gap-1 mt-3">
           <button
-            onClick={() => setShowBowlerModal(true)}
-            className="w-full"
+            onClick={() => setActiveTab('live')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'live'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground'
+            }`}
           >
-            <BowlerCard player={currentBowler} match={match} />
+            Live
+          </button>
+          <button
+            onClick={() => setActiveTab('scorecard')}
+            className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+              activeTab === 'scorecard'
+                ? 'bg-background text-foreground shadow-sm'
+                : 'text-muted-foreground'
+            }`}
+          >
+            Scorecard
           </button>
         </div>
+
+        {/* Live Tab Content */}
+        {activeTab === 'live' && (
+          <>
+            {/* Single Batsman Mode Toggle */}
+            <button
+              onClick={toggleSingleBatsmanMode}
+              className={`w-full mt-3 flex items-center justify-center gap-2 py-2 rounded-xl text-sm font-medium transition-colors ${
+                match.singleBatsmanMode
+                  ? 'bg-accent text-accent-foreground'
+                  : 'bg-muted text-muted-foreground'
+              }`}
+            >
+              <User className="w-4 h-4" />
+              {match.singleBatsmanMode ? 'Single Batsman Mode: ON' : 'Single Batsman Mode: OFF'}
+            </button>
+
+            {/* Free Hit Indicator */}
+            {match.isFreeHit && (
+              <div className="mt-3 bg-success/20 border border-success/40 rounded-xl p-3 text-center">
+                <span className="text-lg font-bold text-success">🎯 FREE HIT</span>
+              </div>
+            )}
+
+            {/* Current Players */}
+            <div className="mt-4 space-y-3">
+              {striker && (
+                <BatsmanCard player={striker} isStriker />
+              )}
+              {!match.singleBatsmanMode && nonStriker && (
+                <BatsmanCard player={nonStriker} />
+              )}
+              <button
+                onClick={() => setShowBowlerModal(true)}
+                className="w-full"
+              >
+                <BowlerCard player={currentBowler} match={match} />
+              </button>
+            </div>
+          </>
+        )}
+
+        {/* Scorecard Tab Content */}
+        {activeTab === 'scorecard' && (
+          <div className="mt-4">
+            <LiveScorecard match={match} />
+          </div>
+        )}
 
         {/* Scoring Controls */}
         <div className="mt-auto pt-6 space-y-4 mb-10">
@@ -384,6 +435,15 @@ const UmpireScoring = () => {
             disabled={processing || pendingWicket}
             isFreeHit={match.isFreeHit}
           />
+          {/* Undo last ball */}
+          <button
+            onClick={handleUndo}
+            disabled={processing || !match.history || match.history.length === 0}
+            className="w-full flex items-center justify-center gap-2 py-3 rounded-xl text-sm font-medium bg-muted text-muted-foreground border border-border transition-colors disabled:opacity-40 active:scale-95"
+          >
+            <Undo2 className="w-4 h-4" />
+            Undo Last Ball
+          </button>
         </div>
       </main>
 

@@ -3,6 +3,7 @@ import { Header } from '@/components/Header';
 import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { BatsmanCard } from '@/components/BatsmanCard';
 import { BowlerCard } from '@/components/BowlerCard';
+import { LiveScorecard } from '@/components/LiveScorecard';
 import { useMatch } from '@/hooks/useMatch';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { Maximize, Minimize } from 'lucide-react';
@@ -15,6 +16,7 @@ const ViewerScoreboard = () => {
   const [showUpdatePulse, setShowUpdatePulse] = useState(false);
   const [lastBallCount, setLastBallCount] = useState(0);
   const [isConnected, setIsConnected] = useState(true);
+  const [activeTab, setActiveTab] = useState<'live' | 'scorecard'>('live');
   const navigate = useNavigate();
 
   // Redirect to result page if match is completed
@@ -179,8 +181,34 @@ const ViewerScoreboard = () => {
           </div>
         )}
 
-        {/* Current Players */}
+        {/* Tab Toggle */}
         {match.status === 'live' && (
+          <div className="flex rounded-xl bg-muted p-1 gap-1">
+            <button
+              onClick={() => setActiveTab('live')}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'live'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              Live
+            </button>
+            <button
+              onClick={() => setActiveTab('scorecard')}
+              className={`flex-1 py-2 rounded-lg text-sm font-medium transition-colors ${
+                activeTab === 'scorecard'
+                  ? 'bg-background text-foreground shadow-sm'
+                  : 'text-muted-foreground'
+              }`}
+            >
+              Scorecard
+            </button>
+          </div>
+        )}
+
+        {/* Live Tab — Current Players */}
+        {match.status === 'live' && activeTab === 'live' && (
           <div className="space-y-3">
             <p className="text-sm font-medium text-muted-foreground">Batting</p>
             {striker && <BatsmanCard player={striker} isStriker />}
@@ -189,6 +217,11 @@ const ViewerScoreboard = () => {
             <p className="text-sm font-medium text-muted-foreground mt-4">Bowling</p>
             <BowlerCard player={currentBowler} match={match} />
           </div>
+        )}
+
+        {/* Scorecard Tab */}
+        {match.status === 'live' && activeTab === 'scorecard' && (
+          <LiveScorecard match={match} />
         )}
 
         {/* Winner Display */}
