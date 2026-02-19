@@ -38,16 +38,32 @@ export const LiveScorecard = ({ match }: LiveScorecardProps) => {
   const recentBalls = match.balls.slice(-12);
 
   const getBallLabel = (ball: typeof match.balls[0]) => {
-    if (ball.isWicket) return 'W';
+    if (ball.isWicket) {
+      const baseRuns = ball.runsOffBat ?? 0;
+      return baseRuns > 0 ? `W+${baseRuns}` : 'W';
+    }
+    if (ball.extraType === 'noball') {
+      const sub = ball.noballSubType ?? 'bat';
+      if (sub === 'wide') {
+        const extra = ball.byeRuns ?? 0;
+        return extra > 0 ? `NBW+${extra}` : 'NBW';
+      }
+      if (sub === 'byes') return `NB+${ball.byeRuns ?? 0}b`;
+      if (sub === 'legbyes') return `NB+${ball.legbyeRuns ?? 0}lb`;
+      if (sub === 'dead') return 'NB';
+      // bat
+      const r = ball.runsOffBat ?? 0;
+      return r > 0 ? `NB+${r}` : 'NB';
+    }
     if (ball.extraType === 'wide') return `Wd${ball.runs > 0 ? `+${ball.runs}` : ''}`;
-    if (ball.extraType === 'noball') return `NB${ball.runsOffBat ? `+${ball.runsOffBat}` : ''}`;
     if (ball.extraType === 'dead') return 'D';
     return String(ball.runs);
   };
 
   const getBallColor = (ball: typeof match.balls[0]) => {
     if (ball.isWicket) return 'bg-destructive text-destructive-foreground';
-    if (ball.extraType === 'wide' || ball.extraType === 'noball') return 'bg-warning/20 text-warning border border-warning/40';
+    if (ball.extraType === 'noball') return 'bg-warning/20 text-warning border border-warning/40';
+    if (ball.extraType === 'wide') return 'bg-warning/20 text-warning border border-warning/40';
     if (ball.runs === 4) return 'bg-success/20 text-success border border-success/40';
     if (ball.runs === 6) return 'bg-success text-success-foreground';
     if (ball.runs === 0) return 'bg-muted text-muted-foreground';

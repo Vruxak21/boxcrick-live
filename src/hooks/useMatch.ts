@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { Match, Player, Ball, WicketType, BowlerStats, FallOfWicket, MatchSnapshot } from '@/types/match';
+import { Match, Player, Ball, WicketType, BowlerStats, FallOfWicket, MatchSnapshot, NoBallSubType } from '@/types/match';
 import { syncMatchToFirebase, getMatchFromFirebase, subscribeToMatch } from '@/lib/firebaseSync';
 import { isFirebaseEnabled } from '@/lib/firebase';
 
@@ -341,7 +341,10 @@ interface RecordBallOptions {
   isWicket?: boolean;
   wicketType?: WicketType;
   fielder?: string;
-  runsOffBat?: number;
+  runsOffBat?: number;       // no ball + bat: runs credited to batsman
+  byeRuns?: number;          // no ball + byes  OR  no ball + wide + extra byes
+  legbyeRuns?: number;       // no ball + leg byes
+  noballSubType?: NoBallSubType;
 }
 
 export const recordBall = async (matchId: string, options: RecordBallOptions) => {
@@ -349,7 +352,7 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
   const match = matches[matchId];
   if (!match) return;
   
-  const { runs, extraType, isWicket = false, wicketType, fielder, runsOffBat } = options;
+  const { runs, extraType, isWicket = false, wicketType, fielder, runsOffBat, byeRuns, legbyeRuns, noballSubType } = options;
   
   const battingTeamKey = match.battingTeam === 'A' ? 'teamA' : 'teamB';
   const bowlingTeamKey = match.bowlingTeam === 'A' ? 'teamA' : 'teamB';
@@ -369,12 +372,31 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
     newExtras.wides += 1 + runs;
     // Wide doesn't count as a legal delivery
   } else if (extraType === 'noball') {
-    newRuns += 1;
+    const subType = noballSubType ?? 'bat';
+    newRuns += 1; // NB penalty run
     newExtras.noBalls += 1;
-    if (runsOffBat !== undefined) {
-      newRuns += runsOffBat;
+    if (subType === 'bat') {
+      const batRuns = runsOffBat ?? 0;
+      newRuns += batRuns;
+    } else if (subType === 'byes') {
+      const byes = byeRuns ?? 0;
+      newRuns += byes;
+      newExtras.byes += byes;
+    } else if (subType === 'legbyes') {
+      const lbs = legbyeRuns ?? 0;
+      newRuns += lbs;
+      newExtras.legByes += lbs;
+    } else if (subType === 'wide') {
+      newRuns += 1; // wide penalty
+      newExtras.wides += 1;
+      const extraByes = byeRuns ?? 0;
+      if (extraByes > 0) {
+        newRuns += extraByes;
+        newExtras.byes += extraByes;
+      }
     }
-    // No ball doesn't count as a legal delivery
+    // 'dead': just the 1 NB, no further runs
+    // No ball never counts as a legal delivery
     setFreeHit = true; // Next ball is free hit
   } else if (extraType !== 'dead') {
     newTotalBalls += 1;
@@ -393,13 +415,27 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
   // Update batsman stats
   const updatedPlayers = battingTeam.players.map(p => {
     if (p.id === match.currentBatsmen.striker) {
-      const batsmanRuns = extraType === 'wide' ? 0 : (runsOffBat !== undefined ? runsOffBat : runs);
-      const isFour = batsmanRuns === 4 && !extraType;
-      const isSix = batsmanRuns === 6 && !extraType;
+      // Runs credited to batsman: only on 'bat' noball or normal delivery
+      let batsmanRuns: number;
+      if (extraType === 'wide') {
+        batsmanRuns = 0;
+      } else if (extraType === 'noball') {
+        const subType = noballSubType ?? 'bat';
+        batsmanRuns = (subType === 'bat') ? (runsOffBat ?? 0) : 0;
+      } else {
+        batsmanRuns = runs;
+      }
+      // Balls faced: no ball + wide doesn't count; dead ball doesn't count
+      const noballIsWide = extraType === 'noball' && noballSubType === 'wide';
+      const noballIsDead = extraType === 'noball' && noballSubType === 'dead';
+      const ballsFacedDelta = (extraType === 'wide' || noballIsWide || noballIsDead) ? 0 : 1;
+      // 4s and 6s count even on no-balls
+      const isFour = batsmanRuns === 4 && (extraType === undefined || extraType === 'noball');
+      const isSix = batsmanRuns === 6 && (extraType === undefined || extraType === 'noball');
       return {
         ...p,
         runs: p.runs + batsmanRuns,
-        ballsFaced: p.ballsFaced + (extraType === 'wide' ? 0 : 1),
+        ballsFaced: p.ballsFaced + ballsFacedDelta,
         fours: p.fours + (isFour ? 1 : 0),
         sixes: p.sixes + (isSix ? 1 : 0),
         isOut: validWicket,
@@ -421,14 +457,31 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
       bowlerBalls += 1;
     }
     
+    // Runs conceded by the bowler
+    let bowlerRunsConceded: number;
+    if (extraType === 'wide') {
+      bowlerRunsConceded = runs + 1; // runs off wide + 1 wide penalty
+    } else if (extraType === 'noball') {
+      const subType = noballSubType ?? 'bat';
+      const addedRuns =
+        subType === 'bat' ? (runsOffBat ?? 0) :
+        subType === 'byes' ? (byeRuns ?? 0) :
+        subType === 'legbyes' ? (legbyeRuns ?? 0) :
+        subType === 'wide' ? (byeRuns ?? 0) : 0;
+      const noPenalty = subType === 'wide' ? 2 : 1; // NB+Wide costs 2, else 1
+      bowlerRunsConceded = addedRuns + noPenalty;
+    } else {
+      bowlerRunsConceded = runs;
+    }
+
     bowlerStats[bowlingTeamKey][match.currentBowler || ''] = {
       ...currentBowlerStats,
       balls: bowlerBalls,
       overs: Math.floor(bowlerBalls / 6),
-      runs: currentBowlerStats.runs + runs + (extraType === 'wide' || extraType === 'noball' ? 1 : 0),
+      runs: currentBowlerStats.runs + bowlerRunsConceded,
       wickets: currentBowlerStats.wickets + (validWicket && wicketType !== 'runout' ? 1 : 0),
       noBalls: currentBowlerStats.noBalls + (extraType === 'noball' ? 1 : 0),
-      wides: currentBowlerStats.wides + (extraType === 'wide' ? 1 : 0),
+      wides: currentBowlerStats.wides + (extraType === 'wide' || (extraType === 'noball' && noballSubType === 'wide') ? 1 : 0),
       extras: currentBowlerStats.extras + (extraType ? 1 : 0),
     };
   }
@@ -467,6 +520,7 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
     runs,
     extras: extraType ? 1 : 0,
     extraType,
+    noballSubType: extraType === 'noball' ? (noballSubType ?? 'bat') : undefined,
     isWicket: validWicket,
     wicketType: validWicket ? wicketType : undefined,
     fielder: validWicket && fielder ? fielder : undefined,
@@ -474,7 +528,9 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
     bowlerId: match.currentBowler || '',
     timestamp: Date.now(),
     isFreeHit: wasFreeHit,
-    runsOffBat,
+    runsOffBat: extraType === 'noball' && (noballSubType ?? 'bat') === 'bat' ? (runsOffBat ?? 0) : undefined,
+    byeRuns: byeRuns,
+    legbyeRuns: legbyeRuns,
   };
   
   // Check innings/match completion

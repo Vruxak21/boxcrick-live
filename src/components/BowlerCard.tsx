@@ -8,11 +8,13 @@ interface BowlerCardProps {
 export const BowlerCard = ({ player, match }: BowlerCardProps) => {
   if (!player) return null;
 
-  // Calculate bowler stats from balls
-  const bowlerBalls = match.balls.filter(b => b.bowlerId === player.id);
-  const runs = bowlerBalls.reduce((sum, b) => sum + b.runs + b.extras, 0);
-  const wickets = bowlerBalls.filter(b => b.isWicket).length;
-  const legalBalls = bowlerBalls.filter(b => !b.extraType || b.extraType === 'noball').length;
+  // Use the pre-computed bowlerStats (correctly maintained by recordBall for all extra sub-types)
+  const bowlingTeamKey = match.bowlingTeam === 'A' ? 'teamA' : 'teamB';
+  const stats = match.bowlerStats[bowlingTeamKey]?.[player.id];
+
+  const runs = stats?.runs ?? 0;
+  const wickets = stats?.wickets ?? 0;
+  const legalBalls = stats?.balls ?? 0;
   const overs = Math.floor(legalBalls / 6);
   const balls = legalBalls % 6;
 

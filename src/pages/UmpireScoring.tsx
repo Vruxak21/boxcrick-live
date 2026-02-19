@@ -14,7 +14,7 @@ import { isFirebaseEnabled } from '@/lib/firebase';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { toast } from '@/hooks/use-toast';
 import { Share2, Eye, Maximize, Minimize, Users, User, Undo2 } from 'lucide-react';
-import { WicketType } from '@/types/match';
+import { WicketType, NoBallSubType } from '@/types/match';
 
 const UmpireScoring = () => {
   const { matchId } = useParams<{ matchId: string }>();
@@ -26,6 +26,10 @@ const UmpireScoring = () => {
   const [showBowlerModal, setShowBowlerModal] = useState(false);
   const [showNewBatsmanModal, setShowNewBatsmanModal] = useState(false);
   const [showNoBallRunsModal, setShowNoBallRunsModal] = useState(false);
+  const [noBallSubType, setNoBallSubType] = useState<NoBallSubType | null>(null);
+  const [noBallRuns, setNoBallRuns] = useState<number | null>(null);
+  const [noBallRunOut, setNoBallRunOut] = useState(false);
+  const [noBallFielder, setNoBallFielder] = useState('');
   const [showRosterModal, setShowRosterModal] = useState<'A' | 'B' | null>(null);
   const [pendingWicket, setPendingWicket] = useState(false);
   const [processing, setProcessing] = useState(false);
@@ -96,12 +100,43 @@ const UmpireScoring = () => {
     setProcessing(false);
   };
 
-  const handleNoBallWithRuns = async (runsOffBat: number) => {
-    if (!matchId || processing) return;
+  const resetNoBallModal = () => {
+    setShowNoBallRunsModal(false);
+    setNoBallSubType(null);
+    setNoBallRuns(null);
+    setNoBallRunOut(false);
+    setNoBallFielder('');
+  };
+
+  const handleNoBallWithRuns = async () => {
+    if (!matchId || processing || noBallSubType === null) return;
     setProcessing(true);
     try {
-      await recordBall(matchId, { runs: 0, extraType: 'noball', runsOffBat });
-      setShowNoBallRunsModal(false);
+      const subType = noBallSubType;
+      const selectedRuns = noBallRuns ?? 0;
+      await recordBall(matchId, {
+        runs: 0,
+        extraType: 'noball',
+        noballSubType: subType,
+        runsOffBat: subType === 'bat' ? selectedRuns : undefined,
+        byeRuns: (subType === 'byes' || subType === 'wide') ? selectedRuns : undefined,
+        legbyeRuns: subType === 'legbyes' ? selectedRuns : undefined,
+        isWicket: noBallRunOut,
+        wicketType: noBallRunOut ? 'runout' : undefined,
+        fielder: noBallRunOut && noBallFielder ? noBallFielder : undefined,
+      });
+      const hadRunOut = noBallRunOut;
+      resetNoBallModal();
+      if (hadRunOut) {
+        const battingTeam = match?.battingTeam === 'A' ? match.teamA : match?.teamB;
+        const available = battingTeam?.players.filter(
+          p => !p.isOut && p.id !== match?.currentBatsmen.nonStriker
+        );
+        if (available && available.length > 0) {
+          setPendingWicket(true);
+          setShowNewBatsmanModal(true);
+        }
+      }
     } catch (error) {
       console.error('Error recording no ball:', error);
     }
@@ -458,32 +493,117 @@ const UmpireScoring = () => {
         />
       )}
 
-      {/* No Ball Runs Modal */}
-      {showNoBallRunsModal && (
+      {/* No Ball Modal — Step 1: Type Selection */}
+      {showNoBallRunsModal && noBallSubType === null && (
         <div className="fixed inset-0 bg-foreground/50 flex items-end justify-center z-50">
           <div className="bg-card w-full max-w-md rounded-t-3xl p-6 animate-fade-in safe-area-bottom">
-            <h3 className="text-xl font-bold mb-4 text-center">Runs off No Ball</h3>
-            <p className="text-sm text-muted-foreground text-center mb-4">
-              1 run added as no ball. How many runs scored off the bat?
+            <h3 className="text-xl font-bold mb-1 text-center">No Ball</h3>
+            <p className="text-sm text-muted-foreground text-center mb-5">
+              +1 No Ball added. What happened?
             </p>
-            <div className="grid grid-cols-4 gap-3 mb-4">
-              {[0, 1, 2, 3, 4, 6].map((runs) => (
+            <div className="grid grid-cols-2 gap-3 mb-3">
+              {([
+                { type: 'bat' as NoBallSubType, label: 'Runs off Bat', desc: 'batsman hit it' },
+                { type: 'byes' as NoBallSubType, label: 'Byes', desc: 'missed bat, ran' },
+                { type: 'legbyes' as NoBallSubType, label: 'Leg Byes', desc: 'hit body, ran' },
+                { type: 'wide' as NoBallSubType, label: 'Wide + No Ball', desc: '+1NB +1WD' },
+              ]).map(({ type, label, desc }) => (
                 <button
-                  key={runs}
-                  onClick={() => handleNoBallWithRuns(runs)}
-                  className={`tap-button py-4 text-lg ${
-                    runs === 4 || runs === 6 ? 'bg-success text-success-foreground' : 'bg-secondary text-secondary-foreground'
-                  }`}
+                  key={type}
+                  onClick={() => setNoBallSubType(type)}
+                  className="tap-button bg-secondary text-secondary-foreground py-4 flex flex-col items-center"
                 >
-                  {runs}
+                  <span className="font-semibold">{label}</span>
+                  <span className="text-xs text-muted-foreground mt-0.5">{desc}</span>
                 </button>
               ))}
             </div>
             <button
-              onClick={() => setShowNoBallRunsModal(false)}
-              className="w-full tap-button bg-muted text-muted-foreground py-4"
+              onClick={async () => {
+                if (!matchId || processing) return;
+                setProcessing(true);
+                try {
+                  await recordBall(matchId, { runs: 0, extraType: 'noball', noballSubType: 'dead' });
+                } catch (e) { console.error(e); }
+                setProcessing(false);
+                resetNoBallModal();
+              }}
+              className="w-full tap-button bg-muted text-muted-foreground py-3 mb-3"
             >
+              Dead Ball (No Ball only, nothing scored)
+            </button>
+            <button onClick={resetNoBallModal} className="w-full tap-button bg-muted text-muted-foreground py-3">
               Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* No Ball Modal — Step 2: Runs + optional Run Out */}
+      {showNoBallRunsModal && noBallSubType !== null && (
+        <div className="fixed inset-0 bg-foreground/50 flex items-end justify-center z-50">
+          <div className="bg-card w-full max-w-md rounded-t-3xl p-6 animate-fade-in safe-area-bottom">
+            <button onClick={() => setNoBallSubType(null)} className="text-sm text-muted-foreground mb-1">← Back</button>
+            <h3 className="text-xl font-bold mb-1 text-center">
+              {noBallSubType === 'bat' ? 'Runs off Bat' :
+               noBallSubType === 'byes' ? 'Bye Runs' :
+               noBallSubType === 'legbyes' ? 'Leg Bye Runs' :
+               'Wide + No Ball'}
+            </h3>
+            <p className="text-sm text-muted-foreground text-center mb-4">
+              {noBallSubType === 'wide'
+                ? '+1 NB +1 WD already added. Any extra byes?'
+                : '+1 NB added. Select runs:'}
+            </p>
+            <div className="grid grid-cols-4 gap-3 mb-4">
+              {(noBallSubType === 'wide' ? [0, 1, 2, 3, 4] : [0, 1, 2, 3, 4, 6]).map((r) => (
+                <button
+                  key={r}
+                  onClick={() => setNoBallRuns(r)}
+                  className={`tap-button py-4 text-lg transition-all ${
+                    noBallRuns === r
+                      ? 'bg-primary text-primary-foreground ring-2 ring-primary'
+                      : r === 4 || r === 6
+                      ? 'bg-success/20 text-success border border-success/40'
+                      : 'bg-secondary text-secondary-foreground'
+                  }`}
+                >
+                  {r}
+                </button>
+              ))}
+            </div>
+
+            {/* Run Out toggle (not for Wide) */}
+            {noBallSubType !== 'wide' && (
+              <div className="mb-4">
+                <button
+                  onClick={() => setNoBallRunOut(v => !v)}
+                  className={`w-full py-3 rounded-xl text-sm font-medium flex items-center justify-center gap-2 transition-colors ${
+                    noBallRunOut
+                      ? 'bg-destructive/10 text-destructive border border-destructive/40'
+                      : 'bg-muted text-muted-foreground'
+                  }`}
+                >
+                  {noBallRunOut ? '✓ Run Out on this ball' : 'Run Out on this ball?'}
+                </button>
+                {noBallRunOut && (
+                  <input
+                    type="text"
+                    placeholder="Fielder name (optional)"
+                    value={noBallFielder}
+                    onChange={e => setNoBallFielder(e.target.value)}
+                    className="mt-2 w-full px-4 py-3 rounded-xl bg-muted border border-border text-sm"
+                  />
+                )}
+              </div>
+            )}
+
+            <button
+              onClick={handleNoBallWithRuns}
+              disabled={noBallRuns === null || processing}
+              className="w-full tap-button bg-primary text-primary-foreground py-4 font-bold disabled:opacity-40"
+            >
+              Confirm
             </button>
           </div>
         </div>

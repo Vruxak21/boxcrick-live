@@ -42,6 +42,8 @@ export interface Team {
   };
 }
 
+export type NoBallSubType = 'bat' | 'byes' | 'legbyes' | 'wide' | 'dead';
+
 export interface Ball {
   id: string;
   over: number;
@@ -49,6 +51,7 @@ export interface Ball {
   runs: number;
   extras: number;
   extraType?: 'wide' | 'noball' | 'bye' | 'legbye' | 'dead';
+  noballSubType?: NoBallSubType;
   isWicket: boolean;
   wicketType?: WicketType;
   fielder?: string;
@@ -57,6 +60,8 @@ export interface Ball {
   timestamp: number;
   isFreeHit?: boolean;
   runsOffBat?: number;
+  byeRuns?: number;
+  legbyeRuns?: number;
 }
 
 export interface FallOfWicket {
