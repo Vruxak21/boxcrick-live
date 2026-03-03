@@ -9,6 +9,7 @@ import { ExtraButtons } from '@/components/ExtraButtons';
 import { WicketTypeSelector } from '@/components/WicketTypeSelector';
 import { RosterManager } from '@/components/RosterManager';
 import { LiveScorecard } from '@/components/LiveScorecard';
+import { RecentBalls } from '@/components/RecentBalls';
 import { useMatch, recordBall, undoBall, selectNewBatsman, changeBowler, addPlayerDuringMatch, deletePlayerDuringMatch, enableMatchSharing } from '@/hooks/useMatch';
 import { isFirebaseEnabled } from '@/lib/firebase';
 import { useFullscreen } from '@/hooks/useFullscreen';
@@ -435,6 +436,13 @@ const UmpireScoring = () => {
             {match.isFreeHit && (
               <div className="mt-3 bg-success/20 border border-success/40 rounded-xl p-3 text-center">
                 <span className="text-lg font-bold text-success">🎯 FREE HIT</span>
+              </div>
+            )}
+
+            {/* Recent Balls */}
+            {match.balls.length > 0 && (
+              <div className="mt-4">
+                <RecentBalls balls={match.balls} />
               </div>
             )}
 

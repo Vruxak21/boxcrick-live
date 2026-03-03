@@ -1,6 +1,7 @@
 import { Match, BowlerStats, FallOfWicket } from '@/types/match';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { useState } from 'react';
+import { RecentBalls } from '@/components/RecentBalls';
 
 interface LiveScorecardProps {
   match: Match;
@@ -13,62 +14,24 @@ const getEconomy = (runs: number, balls: number) =>
   balls > 0 ? ((runs / balls) * 6).toFixed(2) : '-';
 
 export const LiveScorecard = ({ match }: LiveScorecardProps) => {
-  const battingTeamKey = match.battingTeam === 'A' ? 'teamA' : 'teamB';
-  const bowlingTeamKey = match.battingTeam === 'A' ? 'teamB' : 'teamA';
-  const battingTeam = match[battingTeamKey];
-  const bowlingTeam = match[bowlingTeamKey];
-
-  // First innings team (only in 2nd innings)
-  const firstInningsTeamKey = match.battingTeam === 'A' ? 'teamB' : 'teamA';
-  const firstInningsTeam = match.currentInnings === 2 ? match[firstInningsTeamKey] : null;
-
   const [showFow, setShowFow] = useState(false);
 
+  const battingTeam = match.battingTeam === 'A' ? match.teamA : match.teamB;
+  const bowlingTeam = match.bowlingTeam === 'A' ? match.teamA : match.teamB;
+
+  const firstInningsTeam = match.currentInnings === 2
+    ? (match.bowlingTeam === 'A' ? match.teamA : match.teamB)
+    : null;
+
   const batters = battingTeam.players.filter(
-    p => p.ballsFaced > 0 || p.isOut || p.id === match.currentBatsmen.striker || p.id === match.currentBatsmen.nonStriker
+    p => p.ballsFaced > 0 || p.id === match.currentBatsmen.striker || p.id === match.currentBatsmen.nonStriker
   );
-
-  const bowlers = Object.values(match.bowlerStats[bowlingTeamKey]).filter(
-    (b: BowlerStats) => b.balls > 0 || b.wides > 0 || b.noBalls > 0
+  const bowlers: BowlerStats[] = Object.values(
+    match.bowlingTeam === 'A' ? match.bowlerStats.teamA : match.bowlerStats.teamB
   );
-
-  const fow = match.fallOfWickets[battingTeamKey];
-
-  // Last 12 balls for ball-by-ball
-  const recentBalls = match.balls.slice(-12);
-
-  const getBallLabel = (ball: typeof match.balls[0]) => {
-    if (ball.isWicket) {
-      const baseRuns = ball.runsOffBat ?? 0;
-      return baseRuns > 0 ? `W+${baseRuns}` : 'W';
-    }
-    if (ball.extraType === 'noball') {
-      const sub = ball.noballSubType ?? 'bat';
-      if (sub === 'wide') {
-        const extra = ball.byeRuns ?? 0;
-        return extra > 0 ? `NBW+${extra}` : 'NBW';
-      }
-      if (sub === 'byes') return `NB+${ball.byeRuns ?? 0}b`;
-      if (sub === 'legbyes') return `NB+${ball.legbyeRuns ?? 0}lb`;
-      if (sub === 'dead') return 'NB';
-      // bat
-      const r = ball.runsOffBat ?? 0;
-      return r > 0 ? `NB+${r}` : 'NB';
-    }
-    if (ball.extraType === 'wide') return `Wd${ball.runs > 0 ? `+${ball.runs}` : ''}`;
-    if (ball.extraType === 'dead') return 'D';
-    return String(ball.runs);
-  };
-
-  const getBallColor = (ball: typeof match.balls[0]) => {
-    if (ball.isWicket) return 'bg-destructive text-destructive-foreground';
-    if (ball.extraType === 'noball') return 'bg-warning/20 text-warning border border-warning/40';
-    if (ball.extraType === 'wide') return 'bg-warning/20 text-warning border border-warning/40';
-    if (ball.runs === 4) return 'bg-success/20 text-success border border-success/40';
-    if (ball.runs === 6) return 'bg-success text-success-foreground';
-    if (ball.runs === 0) return 'bg-muted text-muted-foreground';
-    return 'bg-secondary text-secondary-foreground';
-  };
+  const fow: FallOfWicket[] = match.battingTeam === 'A'
+    ? match.fallOfWickets.teamA
+    : match.fallOfWickets.teamB;
 
   return (
     <div className="space-y-4">
@@ -86,22 +49,8 @@ export const LiveScorecard = ({ match }: LiveScorecardProps) => {
         </div>
       )}
 
-      {/* Recent Balls */}
-      {recentBalls.length > 0 && (
-        <div className="score-card">
-          <p className="text-xs font-semibold text-muted-foreground mb-2">Recent Balls</p>
-          <div className="flex flex-wrap gap-1.5">
-            {recentBalls.map((ball) => (
-              <span
-                key={ball.id}
-                className={`w-8 h-8 rounded-full flex items-center justify-center text-xs font-bold ${getBallColor(ball)}`}
-              >
-                {getBallLabel(ball)}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
+      {/* Recent Balls — using shared component */}
+      {match.balls.length > 0 && <RecentBalls balls={match.balls} />}
 
       {/* Batting */}
       <div className="score-card">
@@ -240,3 +189,4 @@ export const LiveScorecard = ({ match }: LiveScorecardProps) => {
     </div>
   );
 };
+export default LiveScorecard;

@@ -4,6 +4,7 @@ import { ScoreDisplay } from '@/components/ScoreDisplay';
 import { BatsmanCard } from '@/components/BatsmanCard';
 import { BowlerCard } from '@/components/BowlerCard';
 import { LiveScorecard } from '@/components/LiveScorecard';
+import { RecentBalls } from '@/components/RecentBalls';
 import { useMatch } from '@/hooks/useMatch';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { Maximize, Minimize } from 'lucide-react';
@@ -210,6 +211,7 @@ const ViewerScoreboard = () => {
         {/* Live Tab — Current Players */}
         {match.status === 'live' && activeTab === 'live' && (
           <div className="space-y-3">
+            {match.balls.length > 0 && <RecentBalls balls={match.balls} />}
             <p className="text-sm font-medium text-muted-foreground">Batting</p>
             {striker && <BatsmanCard player={striker} isStriker />}
             {nonStriker && <BatsmanCard player={nonStriker} />}
