@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
-import { useMatch, addPlayers, setOpeners, addJokerPlayer } from '@/hooks/useMatch';
+import { useMatch, addPlayers, setOpeners, addJokerPlayer, markPlayersAdded } from '@/hooks/useMatch';
 import { toast } from '@/hooks/use-toast';
 import { Plus, X, Star } from 'lucide-react';
 
@@ -83,11 +83,12 @@ const TeamSetup = () => {
         await addJokerPlayer(matchId, jokerName.trim());
       }
       
-      setStep('openers');
+      await markPlayersAdded(matchId);
       toast({
         title: 'Players Added',
-        description: 'Now select openers',
+        description: 'Now do the toss',
       });
+      navigate(`/match/${matchId}/toss`);
     } catch (err) {
       console.error('Error saving players:', err);
       toast({

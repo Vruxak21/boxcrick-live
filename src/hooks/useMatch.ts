@@ -241,6 +241,13 @@ export const useMatch = (matchId: string | null, enableFirebaseSync = false) => 
   return { match, loading, error, updateMatch };
 };
 
+export const markPlayersAdded = async (matchId: string) => {
+  const matches = getStoredMatches();
+  const match = matches[matchId];
+  if (!match || match.status !== 'created') return;
+  saveMatch({ ...match, status: 'toss', updatedAt: Date.now() });
+};
+
 export const updateToss = async (matchId: string, winner: 'A' | 'B', decision: 'bat' | 'bowl') => {
   const matches = getStoredMatches();
   const match = matches[matchId];

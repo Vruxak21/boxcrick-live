@@ -267,11 +267,16 @@ const UmpireScoring = () => {
   }
 
   if (match.status === 'created') {
+    navigate(`/match/${matchId}/setup`);
+    return null;
+  }
+
+  if (match.status === 'toss') {
     navigate(`/match/${matchId}/toss`);
     return null;
   }
 
-  if (match.status === 'toss' || match.status === 'setup') {
+  if (match.status === 'setup') {
     navigate(`/match/${matchId}/setup`);
     return null;
   }

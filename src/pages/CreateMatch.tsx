@@ -9,7 +9,7 @@ const CreateMatch = () => {
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     name: '',
-    overs: 6,
+    overs: '6' as string,
     ballType: 'tennis' as 'tennis' | 'leather',
     turfType: 'box' as 'box' | 'turf',
     teamAName: '',
@@ -28,7 +28,8 @@ const CreateMatch = () => {
       return;
     }
 
-    if (formData.overs < 1 || formData.overs > 50) {
+    const oversNum = parseInt(formData.overs, 10);
+    if (!formData.overs || isNaN(oversNum) || oversNum < 1 || oversNum > 50) {
       toast({
         title: 'Invalid Overs',
         description: 'Please enter overs between 1 and 50',
@@ -41,7 +42,7 @@ const CreateMatch = () => {
     try {
       const matchId = await createMatch({
         name: formData.name,
-        overs: formData.overs,
+        overs: parseInt(formData.overs, 10),
         ballType: formData.ballType,
         turfType: formData.turfType,
         teamA: { 
@@ -67,7 +68,7 @@ const CreateMatch = () => {
         description: 'Proceed to toss',
       });
       
-      navigate(`/match/${matchId}/toss`);
+      navigate(`/match/${matchId}/setup`);
     } catch (error) {
       console.error('Error creating match:', error);
       toast({
@@ -105,12 +106,15 @@ const CreateMatch = () => {
               Number of Overs
             </label>
             <input
-              type="number"
-              min="1"
-              max="50"
+              type="text"
+              inputMode="numeric"
               value={formData.overs}
-              onChange={(e) => setFormData({ ...formData, overs: parseInt(e.target.value) || 1 })}
-              placeholder="Enter overs"
+              onChange={(e) => {
+                const val = e.target.value.replace(/\D/g, '');
+                setFormData({ ...formData, overs: val });
+              }}
+              placeholder="e.g. 8"
+              maxLength={2}
               className="w-full h-14 px-4 rounded-xl bg-secondary text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary"
             />
           </div>
