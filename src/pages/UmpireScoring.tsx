@@ -27,6 +27,11 @@ const UmpireScoring = () => {
   const [showBowlerModal, setShowBowlerModal] = useState(false);
   const [showNewBatsmanModal, setShowNewBatsmanModal] = useState(false);
   const [showNoBallRunsModal, setShowNoBallRunsModal] = useState(false);
+  const [showBatsmanModal, setShowBatsmanModal] = useState(false);
+  const [pendingRun, setPendingRun] = useState<number | null>(null);
+  const [pendingBatsmanAction, setPendingBatsmanAction] = useState<'run' | 'wicket' | null>(null);
+  const [selectedBatsmanId, setSelectedBatsmanId] = useState<string | null>(null);
+  const [dismissedBatsmanId, setDismissedBatsmanId] = useState<string | null>(null);
   const [noBallSubType, setNoBallSubType] = useState<NoBallSubType | null>(null);
   const [noBallRuns, setNoBallRuns] = useState<number | null>(null);
   const [noBallRunOut, setNoBallRunOut] = useState(false);
@@ -66,9 +71,19 @@ const UmpireScoring = () => {
 
   const handleRun = async (runs: number) => {
     if (!matchId || processing) return;
+    setPendingRun(runs);
+    setPendingBatsmanAction('run');
+    setShowBatsmanModal(true);
+  };
+
+  const confirmRun = async (batsmanId: string) => {
+    if (!matchId || processing || pendingRun === null) return;
     setProcessing(true);
     try {
-      await recordBall(matchId, { runs });
+      await recordBall(matchId, { runs: pendingRun, batsmanId });
+      setShowBatsmanModal(false);
+      setPendingRun(null);
+      setPendingBatsmanAction(null);
     } catch (error) {
       console.error('Error recording ball:', error);
       toast({
@@ -107,16 +122,19 @@ const UmpireScoring = () => {
     setNoBallRuns(null);
     setNoBallRunOut(false);
     setNoBallFielder('');
+    setSelectedBatsmanId(null);
   };
 
   const handleNoBallWithRuns = async () => {
     if (!matchId || processing || noBallSubType === null) return;
+    if ((noBallSubType === 'bat' || noBallRunOut) && !selectedBatsmanId) return;
     setProcessing(true);
     try {
       const subType = noBallSubType;
       const selectedRuns = noBallRuns ?? 0;
       await recordBall(matchId, {
         runs: 0,
+        batsmanId: selectedBatsmanId || undefined,
         extraType: 'noball',
         noballSubType: subType,
         runsOffBat: subType === 'bat' ? selectedRuns : undefined,
@@ -127,11 +145,15 @@ const UmpireScoring = () => {
         fielder: noBallRunOut && noBallFielder ? noBallFielder : undefined,
       });
       const hadRunOut = noBallRunOut;
+      if (hadRunOut) setDismissedBatsmanId(selectedBatsmanId);
       resetNoBallModal();
       if (hadRunOut) {
         const battingTeam = match?.battingTeam === 'A' ? match.teamA : match?.teamB;
         const available = battingTeam?.players.filter(
-          p => !p.isOut && p.id !== match?.currentBatsmen.nonStriker
+          p => !p.isOut && p.id !== selectedBatsmanId &&
+            p.id !== (selectedBatsmanId === match?.currentBatsmen.striker
+              ? match?.currentBatsmen.nonStriker
+              : match?.currentBatsmen.striker)
         );
         if (available && available.length > 0) {
           setPendingWicket(true);
@@ -145,18 +167,38 @@ const UmpireScoring = () => {
   };
 
   const handleWicket = () => {
-    setShowWicketModal(true);
+    setPendingBatsmanAction('wicket');
+    setShowBatsmanModal(true);
+  };
+
+  const selectBatsmanForAction = async (batsmanId: string) => {
+    setSelectedBatsmanId(batsmanId);
+    if (pendingBatsmanAction === 'run') {
+      await confirmRun(batsmanId);
+    } else {
+      setShowBatsmanModal(false);
+      setShowWicketModal(true);
+    }
   };
 
   const confirmWicket = async (wicketType: WicketType, fielder?: string) => {
     if (!matchId || processing) return;
+    if (!selectedBatsmanId) return;
     setProcessing(true);
     try {
-      await recordBall(matchId, { runs: 0, isWicket: true, wicketType, fielder });
+      await recordBall(matchId, { runs: 0, batsmanId: selectedBatsmanId, isWicket: true, wicketType, fielder });
       setShowWicketModal(false);
+      setDismissedBatsmanId(selectedBatsmanId);
+      setShowBatsmanModal(false);
+      setPendingBatsmanAction(null);
       
       const battingTeam = match?.battingTeam === 'A' ? match.teamA : match?.teamB;
-      const availableBatsmen = battingTeam?.players.filter(p => !p.isOut && p.id !== match?.currentBatsmen.nonStriker);
+      const availableBatsmen = battingTeam?.players.filter(
+      p => !p.isOut && p.id !== selectedBatsmanId &&
+        p.id !== (selectedBatsmanId === match?.currentBatsmen.striker
+          ? match?.currentBatsmen.nonStriker
+          : match?.currentBatsmen.striker)
+      );
       
       if (availableBatsmen && availableBatsmen.length > 0) {
         setPendingWicket(true);
@@ -171,9 +213,10 @@ const UmpireScoring = () => {
   const handleSelectNewBatsman = async (playerId: string) => {
     if (!matchId) return;
     try {
-      await selectNewBatsman(matchId, playerId);
+      await selectNewBatsman(matchId, playerId, dismissedBatsmanId || undefined);
       setShowNewBatsmanModal(false);
       setPendingWicket(false);
+      setDismissedBatsmanId(null);
     } catch (error) {
       console.error('Error selecting batsman:', error);
     }
@@ -495,10 +538,49 @@ const UmpireScoring = () => {
         </div>
       </main>
 
+      {/* Batsman Selection Modal */}
+      {showBatsmanModal && (
+        <div className="fixed inset-0 bg-foreground/50 flex items-end justify-center z-50">
+          <div className="bg-card w-full max-w-md rounded-t-3xl p-6 animate-fade-in safe-area-bottom">
+            <h3 className="text-xl font-bold mb-4 text-center">
+              {pendingBatsmanAction === 'wicket' ? 'Which batsman is out?' : `Who scored ${pendingRun ?? ''} runs?`}
+            </h3>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {battingTeam.players
+                .filter(p => !p.isOut && (
+                  match.singleBatsmanMode
+                    ? p.id === match.currentBatsmen.striker
+                    : p.id === match.currentBatsmen.striker || p.id === match.currentBatsmen.nonStriker
+                ))
+                .map(player => (
+                  <button
+                    key={player.id}
+                    onClick={() => selectBatsmanForAction(player.id)}
+                    className="tap-button bg-secondary text-secondary-foreground py-4"
+                  >
+                    {player.name}
+                    {player.id === match.currentBatsmen.striker ? ' (striker)' : ''}
+                  </button>
+                ))}
+            </div>
+            <button
+              onClick={() => {
+                setShowBatsmanModal(false);
+                setPendingBatsmanAction(null);
+                setPendingRun(null);
+              }}
+              className="w-full tap-button bg-muted text-muted-foreground py-4"
+            >
+              Cancel
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Wicket Type Selection Modal */}
-      {showWicketModal && striker && (
+      {showWicketModal && selectedBatsmanId && (
         <WicketTypeSelector
-          batsmanName={striker.name}
+          batsmanName={battingTeam.players.find(p => p.id === selectedBatsmanId)?.name || 'batsman'}
           bowlingTeamPlayers={bowlingTeam.players}
           onSelect={confirmWicket}
           onCancel={() => setShowWicketModal(false)}
@@ -586,6 +668,31 @@ const UmpireScoring = () => {
               ))}
             </div>
 
+            {(noBallSubType === 'bat' || noBallRunOut) && (
+              <div className="mb-4">
+                <p className="text-sm font-medium mb-2">Select batsman</p>
+                <div className="grid grid-cols-2 gap-2">
+                  {battingTeam.players
+                    .filter(p => !p.isOut && (
+                      p.id === match.currentBatsmen.striker || p.id === match.currentBatsmen.nonStriker
+                    ))
+                    .map(player => (
+                      <button
+                        key={player.id}
+                        onClick={() => setSelectedBatsmanId(player.id)}
+                        className={`tap-button py-3 ${
+                          selectedBatsmanId === player.id
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-secondary text-secondary-foreground'
+                        }`}
+                      >
+                        {player.name}
+                      </button>
+                    ))}
+                </div>
+              </div>
+            )}
+
             {/* Run Out toggle (not for Wide) */}
             {noBallSubType !== 'wide' && (
               <div className="mb-4">
@@ -613,7 +720,7 @@ const UmpireScoring = () => {
 
             <button
               onClick={handleNoBallWithRuns}
-              disabled={noBallRuns === null || processing}
+              disabled={noBallRuns === null || processing || ((noBallSubType === 'bat' || noBallRunOut) && !selectedBatsmanId)}
               className="w-full tap-button bg-primary text-primary-foreground py-4 font-bold disabled:opacity-40"
             >
               Confirm

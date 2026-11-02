@@ -344,6 +344,7 @@ export const setOpeners = async (matchId: string, strikerId: string, nonStrikerI
 
 interface RecordBallOptions {
   runs: number;
+  batsmanId?: string;
   extraType?: 'wide' | 'noball' | 'dead';
   isWicket?: boolean;
   wicketType?: WicketType;
@@ -359,11 +360,12 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
   const match = matches[matchId];
   if (!match) return;
   
-  const { runs, extraType, isWicket = false, wicketType, fielder, runsOffBat, byeRuns, legbyeRuns, noballSubType } = options;
+  const { runs, batsmanId, extraType, isWicket = false, wicketType, fielder, runsOffBat, byeRuns, legbyeRuns, noballSubType } = options;
   
   const battingTeamKey = match.battingTeam === 'A' ? 'teamA' : 'teamB';
   const bowlingTeamKey = match.bowlingTeam === 'A' ? 'teamA' : 'teamB';
   const battingTeam = match[battingTeamKey];
+  const scoringBatsmanId = batsmanId || match.currentBatsmen.striker;
   const fowKey = match.battingTeam === 'A' ? 'teamA' : 'teamB';
   
   let newTotalBalls = battingTeam.totalBalls;
@@ -421,7 +423,7 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
   
   // Update batsman stats
   const updatedPlayers = battingTeam.players.map(p => {
-    if (p.id === match.currentBatsmen.striker) {
+    if (p.id === scoringBatsmanId) {
       // Runs credited to batsman: only on 'bat' noball or normal delivery
       let batsmanRuns: number;
       if (extraType === 'wide') {
@@ -496,7 +498,7 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
   // Fall of wickets
   const fallOfWickets = { ...match.fallOfWickets };
   if (validWicket) {
-    const outPlayer = updatedPlayers.find(p => p.id === match.currentBatsmen.striker);
+    const outPlayer = updatedPlayers.find(p => p.id === batsmanId);
     if (outPlayer) {
       const fow: FallOfWicket = {
         playerName: outPlayer.name,
@@ -531,7 +533,7 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
     isWicket: validWicket,
     wicketType: validWicket ? wicketType : undefined,
     fielder: validWicket && fielder ? fielder : undefined,
-    batsmanId: match.currentBatsmen.striker || '',
+    batsmanId: scoringBatsmanId || '',
     bowlerId: match.currentBowler || '',
     timestamp: Date.now(),
     isFreeHit: wasFreeHit,
@@ -628,11 +630,16 @@ export const undoBall = async (matchId: string) => {
   saveMatch({ ...previousSnapshot, history, id: matchId } as Match);
 };
 
-export const selectNewBatsman = async (matchId: string, newBatsmanId: string) => {
+export const selectNewBatsman = async (matchId: string, newBatsmanId: string, dismissedBatsmanId?: string) => {
   const matches = getStoredMatches();
   const match = matches[matchId];
   if (!match) return;
-  saveMatch({ ...match, currentBatsmen: { ...match.currentBatsmen, striker: newBatsmanId }, updatedAt: Date.now() });
+  const dismissedId = dismissedBatsmanId || match.currentBatsmen.striker;
+  const currentBatsmen = {
+    striker: match.currentBatsmen.striker === dismissedId ? newBatsmanId : match.currentBatsmen.striker,
+    nonStriker: match.currentBatsmen.nonStriker === dismissedId ? newBatsmanId : match.currentBatsmen.nonStriker,
+  };
+  saveMatch({ ...match, currentBatsmen, updatedAt: Date.now() });
 };
 
 export const changeBowler = async (matchId: string, newBowlerId: string) => {
