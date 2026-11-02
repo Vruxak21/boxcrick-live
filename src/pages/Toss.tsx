@@ -9,43 +9,16 @@ const Toss = () => {
   const navigate = useNavigate();
   const { match, loading, error } = useMatch(matchId || null);
   
-  const [isFlipping, setIsFlipping] = useState(false);
-  const [tossResult, setTossResult] = useState<'A' | 'B' | null>(null);
-  const [decision, setDecision] = useState<'bat' | 'bowl' | null>(null);
-  const [showSkip, setShowSkip] = useState(false);
-  const [skipBatting, setSkipBatting] = useState<'A' | 'B' | null>(null);
+  const [battingTeam, setBattingTeam] = useState<'A' | 'B' | null>(null);
 
-  const flipToss = () => {
-    if (isFlipping) return;
-    setIsFlipping(true);
-    setTossResult(null);
-    setDecision(null);
-    setTimeout(() => {
-      const winner = Math.random() < 0.5 ? 'A' : 'B';
-      setTossResult(winner);
-      setIsFlipping(false);
-    }, 2000);
-  };
-
-  const confirmToss = async () => {
-    if (!matchId || !tossResult || !decision) return;
+  const confirmTeams = async () => {
+    if (!matchId || !battingTeam) return;
     try {
-      await updateToss(matchId, tossResult, decision);
+      await updateToss(matchId, battingTeam, 'bat');
       navigate(`/match/${matchId}/setup`);
     } catch (error) {
-      console.error('Error saving toss:', error);
-      toast({ title: 'Error', description: 'Failed to save toss result', variant: 'destructive' });
-    }
-  };
-
-  const confirmSkip = async () => {
-    if (!matchId || !skipBatting) return;
-    try {
-      // Winner bats — toss winner = batting team, decision = bat
-      await updateToss(matchId, skipBatting, 'bat');
-      navigate(`/match/${matchId}/setup`);
-    } catch (error) {
-      console.error('Error skipping toss:', error);
+      console.error('Error saving team selection:', error);
+      toast({ title: 'Error', description: 'Failed to save team selection', variant: 'destructive' });
     }
   };
 
@@ -63,7 +36,7 @@ const Toss = () => {
   if (error || !match) {
     return (
       <div className="min-h-screen bg-background">
-        <Header title="Toss" showBack />
+        <Header title="Choose Teams" showBack />
         <div className="container px-4 py-8 text-center">
           <p className="text-destructive">Match not found</p>
         </div>
@@ -73,7 +46,7 @@ const Toss = () => {
 
   return (
     <div className="min-h-screen bg-background">
-      <Header title="Toss" showBack />
+      <Header title="Choose Teams" showBack />
       
       <main className="container px-4 py-8 max-w-md mx-auto">
         {/* Match Info */}
@@ -84,135 +57,48 @@ const Toss = () => {
           </p>
         </div>
 
-        {/* Skip Toss Panel */}
-        {showSkip ? (
-          <div className="animate-fade-in space-y-6">
-            <div className="score-card text-center">
-              <p className="text-muted-foreground mb-1">Who bats first?</p>
-              <p className="text-sm text-muted-foreground">Choose manually — no coin flip</p>
-            </div>
-            <div className="grid grid-cols-2 gap-4">
-              <button
-                onClick={() => setSkipBatting('A')}
-                className={`tap-button text-lg py-6 ${
-                  skipBatting === 'A' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
-                }`}
-              >
-                {match.teamA.name}
-              </button>
-              <button
-                onClick={() => setSkipBatting('B')}
-                className={`tap-button text-lg py-6 ${
-                  skipBatting === 'B' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
-                }`}
-              >
-                {match.teamB.name}
-              </button>
-            </div>
-            {skipBatting && (
-              <button
-                onClick={confirmSkip}
-                className="w-full tap-button bg-success text-success-foreground text-lg py-5 font-bold animate-fade-in"
-              >
-                Confirm — {skipBatting === 'A' ? match.teamA.name : match.teamB.name} Bats
-              </button>
-            )}
-            <button
-              onClick={() => { setShowSkip(false); setSkipBatting(null); }}
-              className="w-full tap-button bg-muted text-muted-foreground py-3"
-            >
-              Back to Coin Flip
-            </button>
+        <div className="animate-fade-in space-y-6">
+          <div className="score-card text-center">
+            <p className="text-muted-foreground mb-1">Choose the teams for the first innings</p>
+            <p className="text-sm text-muted-foreground">Select who will bat first. The other team will bowl.</p>
           </div>
-        ) : (
-          <>
-            {/* Coin */}
-            <div className="flex justify-center mb-8">
-              <div
-                className={`w-32 h-32 rounded-full bg-gradient-to-br from-primary to-primary/70 flex items-center justify-center shadow-lg ${
-                  isFlipping ? 'animate-coin-flip' : ''
+          <div className="grid grid-cols-2 gap-4">
+            {(['A', 'B'] as const).map((team) => (
+              <button
+                key={team}
+                onClick={() => setBattingTeam(team)}
+                className={`tap-button text-lg py-6 ${
+                  battingTeam === team ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
                 }`}
-                style={{ perspective: '1000px' }}
               >
-                {tossResult ? (
-                  <span className="text-primary-foreground font-bold text-lg">
-                    {tossResult === 'A' ? match.teamA.name : match.teamB.name}
-                  </span>
-                ) : (
-                  <span className="text-primary-foreground font-bold text-2xl">?</span>
-                )}
-              </div>
+                <span className="block font-bold">{team === 'A' ? match.teamA.name : match.teamB.name}</span>
+                <span className="block text-sm mt-1 opacity-80">
+                  {battingTeam === team ? 'Bats first' : 'Select to bat'}
+                </span>
+              </button>
+            ))}
+          </div>
+          {battingTeam && (
+            <div className="score-card text-center animate-fade-in">
+              <p className="font-semibold">
+                {battingTeam === 'A' ? match.teamA.name : match.teamB.name} will bat first
+              </p>
+              <p className="text-sm text-muted-foreground mt-1">
+                {battingTeam === 'A' ? match.teamB.name : match.teamA.name} will bowl first
+              </p>
             </div>
-
-            {/* Flip Button */}
-            {!tossResult && (
-              <button
-                onClick={flipToss}
-                disabled={isFlipping}
-                className={`w-full tap-button bg-primary text-primary-foreground text-lg py-5 font-bold mb-4 ${
-                  isFlipping ? 'opacity-50' : ''
-                }`}
-              >
-                {isFlipping ? 'Flipping...' : 'Flip Toss'}
-              </button>
-            )}
-
-            {/* Toss Result */}
-            {tossResult && (
-              <div className="animate-fade-in space-y-6">
-                <div className="score-card text-center">
-                  <p className="text-muted-foreground mb-2">Toss Won By</p>
-                  <p className="text-2xl font-bold text-primary">
-                    {tossResult === 'A' ? match.teamA.name : match.teamB.name}
-                  </p>
-                </div>
-                <div className="space-y-3">
-                  <p className="text-sm font-medium text-muted-foreground text-center">Choose to</p>
-                  <div className="grid grid-cols-2 gap-4">
-                    <button
-                      onClick={() => setDecision('bat')}
-                      className={`tap-button text-lg py-6 ${
-                        decision === 'bat' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
-                      }`}
-                    >
-                      Bat
-                    </button>
-                    <button
-                      onClick={() => setDecision('bowl')}
-                      className={`tap-button text-lg py-6 ${
-                        decision === 'bowl' ? 'bg-primary text-primary-foreground' : 'bg-secondary text-secondary-foreground'
-                      }`}
-                    >
-                      Bowl
-                    </button>
-                  </div>
-                </div>
-                {decision && (
-                  <button
-                    onClick={confirmToss}
-                    className="w-full tap-button bg-success text-success-foreground text-lg py-5 font-bold animate-fade-in"
-                  >
-                    Confirm & Select Openers
-                  </button>
-                )}
-              </div>
-            )}
-
-            {/* Skip Toss */}
-            {!tossResult && !isFlipping && (
-              <button
-                onClick={() => setShowSkip(true)}
-                className="w-full tap-button bg-muted text-muted-foreground py-3"
-              >
-                Skip Toss — Choose Manually
-              </button>
-            )}
-          </>
-        )}
+          )}
+          <button
+            onClick={confirmTeams}
+            disabled={!battingTeam}
+            className="w-full tap-button bg-success text-success-foreground text-lg py-5 font-bold disabled:opacity-40"
+          >
+            Confirm & Select Openers
+          </button>
+        </div>
       </main>
     </div>
   );
 };
 
 export default Toss;
-

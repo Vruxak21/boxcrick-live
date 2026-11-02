@@ -86,7 +86,7 @@ const TeamSetup = () => {
       await markPlayersAdded(matchId);
       toast({
         title: 'Players Added',
-        description: 'Now do the toss',
+        description: 'Now choose which team bats first',
       });
       navigate(`/match/${matchId}/toss`);
     } catch (err) {
