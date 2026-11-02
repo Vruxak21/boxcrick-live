@@ -10,7 +10,7 @@ import { WicketTypeSelector } from '@/components/WicketTypeSelector';
 import { RosterManager } from '@/components/RosterManager';
 import { LiveScorecard } from '@/components/LiveScorecard';
 import { RecentBalls } from '@/components/RecentBalls';
-import { useMatch, recordBall, undoBall, selectNewBatsman, changeBowler, addPlayerDuringMatch, deletePlayerDuringMatch, enableMatchSharing } from '@/hooks/useMatch';
+import { useMatch, recordBall, undoBall, selectNewBatsman, selectStriker, changeBowler, addPlayerDuringMatch, deletePlayerDuringMatch, enableMatchSharing } from '@/hooks/useMatch';
 import { isFirebaseEnabled } from '@/lib/firebase';
 import { useFullscreen } from '@/hooks/useFullscreen';
 import { toast } from '@/hooks/use-toast';
@@ -28,6 +28,7 @@ const UmpireScoring = () => {
   const [showNewBatsmanModal, setShowNewBatsmanModal] = useState(false);
   const [showNoBallRunsModal, setShowNoBallRunsModal] = useState(false);
   const [showBatsmanModal, setShowBatsmanModal] = useState(false);
+  const [showStrikeModal, setShowStrikeModal] = useState(false);
   const [pendingRun, setPendingRun] = useState<number | null>(null);
   const [pendingBatsmanAction, setPendingBatsmanAction] = useState<'run' | 'wicket' | null>(null);
   const [selectedBatsmanId, setSelectedBatsmanId] = useState<string | null>(null);
@@ -49,12 +50,12 @@ const UmpireScoring = () => {
       const currentOverNumber = Math.floor(battingTeam.totalBalls / 6);
       const isOverComplete = battingTeam.totalBalls > 0 && battingTeam.totalBalls % 6 === 0;
       
-      if (isOverComplete && !showBowlerModal && !processing && !pendingWicket && currentOverNumber > lastOverHandled) {
+      if (isOverComplete && !showBowlerModal && !showStrikeModal && !processing && !pendingWicket && currentOverNumber > lastOverHandled) {
         setShowBowlerModal(true);
         setLastOverHandled(currentOverNumber);
       }
     }
-  }, [match?.teamA.totalBalls, match?.teamB.totalBalls, match?.status, showBowlerModal, processing, pendingWicket, lastOverHandled]);
+  }, [match?.teamA.totalBalls, match?.teamB.totalBalls, match?.status, showBowlerModal, showStrikeModal, processing, pendingWicket, lastOverHandled]);
 
   const handleUndo = async () => {
     if (!matchId || processing) return;
@@ -82,6 +83,7 @@ const UmpireScoring = () => {
     try {
       await recordBall(matchId, { runs: pendingRun, batsmanId });
       setShowBatsmanModal(false);
+      setShowStrikeModal(true);
       setPendingRun(null);
       setPendingBatsmanAction(null);
     } catch (error) {
@@ -98,10 +100,6 @@ const UmpireScoring = () => {
   const handleExtra = async (type: 'wide' | 'noball' | 'dead') => {
     if (!matchId || processing) return;
     
-    if (type === 'dead') {
-      return;
-    }
-
     if (type === 'noball') {
       setShowNoBallRunsModal(true);
       return;
@@ -110,6 +108,7 @@ const UmpireScoring = () => {
     setProcessing(true);
     try {
       await recordBall(matchId, { runs: 0, extraType: type });
+      setShowStrikeModal(true);
     } catch (error) {
       console.error('Error recording extra:', error);
     }
@@ -159,6 +158,8 @@ const UmpireScoring = () => {
           setPendingWicket(true);
           setShowNewBatsmanModal(true);
         }
+      } else {
+        setShowStrikeModal(true);
       }
     } catch (error) {
       console.error('Error recording no ball:', error);
@@ -203,6 +204,8 @@ const UmpireScoring = () => {
       if (availableBatsmen && availableBatsmen.length > 0) {
         setPendingWicket(true);
         setShowNewBatsmanModal(true);
+      } else {
+        setShowStrikeModal(true);
       }
     } catch (error) {
       console.error('Error recording wicket:', error);
@@ -217,9 +220,22 @@ const UmpireScoring = () => {
       setShowNewBatsmanModal(false);
       setPendingWicket(false);
       setDismissedBatsmanId(null);
+      setShowStrikeModal(true);
     } catch (error) {
       console.error('Error selecting batsman:', error);
     }
+  };
+
+  const handleSelectStriker = async (playerId: string) => {
+    if (!matchId || processing) return;
+    setProcessing(true);
+    try {
+      await selectStriker(matchId, playerId);
+      setShowStrikeModal(false);
+    } catch (error) {
+      console.error('Error selecting striker:', error);
+    }
+    setProcessing(false);
   };
 
   const handleChangeBowler = async (playerId: string) => {
@@ -483,9 +499,9 @@ const UmpireScoring = () => {
             )}
 
             {/* Recent Balls */}
-            {match.balls.length > 0 && (
+            {match.balls.some(ball => ball.battingTeam === match.battingTeam) && (
               <div className="mt-4">
-                <RecentBalls balls={match.balls} />
+                <RecentBalls balls={match.balls} battingTeam={match.battingTeam} />
               </div>
             )}
 
@@ -763,6 +779,40 @@ const UmpireScoring = () => {
                   </button>
                 );
               })}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Next Striker Modal */}
+      {showStrikeModal && !showNewBatsmanModal && (
+        <div className="fixed inset-0 bg-foreground/50 flex items-end justify-center z-50">
+          <div className="bg-card w-full max-w-md rounded-t-3xl p-6 animate-fade-in safe-area-bottom">
+            <h3 className="text-xl font-bold mb-2 text-center">Who is on strike now?</h3>
+            <p className="text-sm text-muted-foreground text-center mb-4">
+              Confirm the batsman facing the next delivery.
+            </p>
+            <div className="grid grid-cols-2 gap-3 mb-4">
+              {battingTeam.players
+                .filter(player =>
+                  !player.isOut &&
+                  (player.id === match.currentBatsmen.striker || player.id === match.currentBatsmen.nonStriker)
+                )
+                .map(player => (
+                  <button
+                    key={player.id}
+                    onClick={() => handleSelectStriker(player.id)}
+                    disabled={processing}
+                    className={`tap-button py-4 ${
+                      player.id === match.currentBatsmen.striker
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-secondary text-secondary-foreground'
+                    } disabled:opacity-50`}
+                  >
+                    {player.name}
+                    {player.id === match.currentBatsmen.striker ? ' (current)' : ''}
+                  </button>
+                ))}
             </div>
           </div>
         </div>

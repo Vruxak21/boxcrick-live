@@ -2,6 +2,7 @@ import { Ball } from '@/types/match';
 
 interface RecentBallsProps {
   balls: Ball[];
+  battingTeam?: 'A' | 'B';
   /** How many of the most recent balls to show. Defaults to 30 (5 overs) */
   limit?: number;
 }
@@ -52,10 +53,13 @@ const groupByOver = (balls: Ball[]): { over: number; balls: Ball[] }[] => {
     .map(([over, balls]) => ({ over, balls }));
 };
 
-export const RecentBalls = ({ balls, limit = 30 }: RecentBallsProps) => {
-  if (balls.length === 0) return null;
+export const RecentBalls = ({ balls, battingTeam, limit = 30 }: RecentBallsProps) => {
+  const teamBalls = battingTeam
+    ? balls.filter(ball => ball.battingTeam === battingTeam)
+    : balls;
+  if (teamBalls.length === 0) return null;
 
-  const recent = balls.slice(-limit);
+  const recent = teamBalls.slice(-limit);
   const overs = groupByOver(recent);
 
   return (

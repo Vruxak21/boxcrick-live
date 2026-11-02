@@ -50,7 +50,9 @@ export const LiveScorecard = ({ match }: LiveScorecardProps) => {
       )}
 
       {/* Recent Balls — using shared component */}
-      {match.balls.length > 0 && <RecentBalls balls={match.balls} />}
+      {match.balls.some(ball => ball.battingTeam === match.battingTeam) && (
+        <RecentBalls balls={match.balls} battingTeam={match.battingTeam} />
+      )}
 
       {/* Batting */}
       <div className="score-card">

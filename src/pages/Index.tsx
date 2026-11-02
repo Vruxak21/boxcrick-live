@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Header } from '@/components/Header';
 import { MatchCard } from '@/components/MatchCard';
-import { getLatestUnfinishedMatch } from '@/hooks/useMatch';
+import { deleteMatch, getLatestUnfinishedMatch } from '@/hooks/useMatch';
 import { Match } from '@/types/match';
 import { Circle } from 'lucide-react';
 
@@ -10,6 +10,10 @@ const Index = () => {
   const navigate = useNavigate();
   const [unfinishedMatch, setUnfinishedMatch] = useState<Match | null>(null);
   const [loading, setLoading] = useState(true);
+
+  const refreshUnfinishedMatch = async () => {
+    setUnfinishedMatch(await getLatestUnfinishedMatch());
+  };
 
   useEffect(() => {
     const checkUnfinishedMatch = async () => {
@@ -23,6 +27,13 @@ const Index = () => {
     };
     checkUnfinishedMatch();
   }, []);
+
+  const handleDeleteMatch = async () => {
+    if (!unfinishedMatch) return;
+    if (!window.confirm('Delete this unfinished match? This cannot be undone.')) return;
+    await deleteMatch(unfinishedMatch.id);
+    await refreshUnfinishedMatch();
+  };
 
   return (
     <div className="min-h-screen bg-background">
@@ -67,7 +78,7 @@ const Index = () => {
             <p className="text-sm font-medium text-muted-foreground">
               Unfinished Match
             </p>
-            <MatchCard match={unfinishedMatch} />
+            <MatchCard match={unfinishedMatch} onDelete={handleDeleteMatch} />
           </div>
         )}
 

@@ -211,7 +211,9 @@ const ViewerScoreboard = () => {
         {/* Live Tab — Current Players */}
         {match.status === 'live' && activeTab === 'live' && (
           <div className="space-y-3">
-            {match.balls.length > 0 && <RecentBalls balls={match.balls} />}
+            {match.balls.some(ball => ball.battingTeam === match.battingTeam) && (
+              <RecentBalls balls={match.balls} battingTeam={match.battingTeam} />
+            )}
             <p className="text-sm font-medium text-muted-foreground">Batting</p>
             {striker && <BatsmanCard player={striker} isStriker />}
             {nonStriker && <BatsmanCard player={nonStriker} />}

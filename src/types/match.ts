@@ -56,6 +56,7 @@ export interface Ball {
   wicketType?: WicketType;
   fielder?: string;
   batsmanId: string;
+  battingTeam?: 'A' | 'B';
   bowlerId: string;
   timestamp: number;
   isFreeHit?: boolean;

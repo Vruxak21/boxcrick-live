@@ -534,6 +534,7 @@ export const recordBall = async (matchId: string, options: RecordBallOptions) =>
     wicketType: validWicket ? wicketType : undefined,
     fielder: validWicket && fielder ? fielder : undefined,
     batsmanId: scoringBatsmanId || '',
+    battingTeam: match.battingTeam,
     bowlerId: match.currentBowler || '',
     timestamp: Date.now(),
     isFreeHit: wasFreeHit,
@@ -640,6 +641,25 @@ export const selectNewBatsman = async (matchId: string, newBatsmanId: string, di
     nonStriker: match.currentBatsmen.nonStriker === dismissedId ? newBatsmanId : match.currentBatsmen.nonStriker,
   };
   saveMatch({ ...match, currentBatsmen, updatedAt: Date.now() });
+};
+
+export const selectStriker = async (matchId: string, strikerId: string) => {
+  const matches = getStoredMatches();
+  const match = matches[matchId];
+  if (!match) return;
+  if (match.singleBatsmanMode || match.currentBatsmen.striker === strikerId) {
+    saveMatch({ ...match, currentBatsmen: { ...match.currentBatsmen, striker: strikerId }, updatedAt: Date.now() });
+    return;
+  }
+  if (match.currentBatsmen.nonStriker !== strikerId) return;
+  saveMatch({
+    ...match,
+    currentBatsmen: {
+      striker: strikerId,
+      nonStriker: match.currentBatsmen.striker,
+    },
+    updatedAt: Date.now(),
+  });
 };
 
 export const changeBowler = async (matchId: string, newBowlerId: string) => {
@@ -812,6 +832,10 @@ export const deleteMatch = async (matchId: string): Promise<void> => {
   const matches = getStoredMatches();
   delete matches[matchId];
   localStorage.setItem(STORAGE_KEY, JSON.stringify(matches));
+  const myMatches = getMyMatches();
+  myMatches.delete(matchId);
+  localStorage.setItem(MY_MATCHES_KEY, JSON.stringify([...myMatches]));
+  window.dispatchEvent(new CustomEvent('matchUpdate', { detail: { matchId } }));
 };
 
 // Add player during live match

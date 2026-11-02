@@ -1,11 +1,13 @@
 import { Match } from '@/types/match';
 import { useNavigate } from 'react-router-dom';
+import { Trash2 } from 'lucide-react';
 
 interface MatchCardProps {
   match: Match;
+  onDelete?: () => void;
 }
 
-export const MatchCard = ({ match }: MatchCardProps) => {
+export const MatchCard = ({ match, onDelete }: MatchCardProps) => {
   const navigate = useNavigate();
   
   const getStatusLabel = () => {
@@ -21,9 +23,14 @@ export const MatchCard = ({ match }: MatchCardProps) => {
   };
 
   return (
-    <button
+    <div
       onClick={() => navigate(`/match/${match.id}/umpire`)}
-      className="score-card w-full text-left hover:border-primary transition-colors"
+      className="score-card w-full text-left hover:border-primary transition-colors cursor-pointer"
+      role="button"
+      tabIndex={0}
+      onKeyDown={(event) => {
+        if (event.key === 'Enter' || event.key === ' ') navigate(`/match/${match.id}/umpire`);
+      }}
     >
       <div className="flex items-start justify-between mb-3">
         <div>
@@ -32,13 +39,29 @@ export const MatchCard = ({ match }: MatchCardProps) => {
             {match.overs} overs • {match.ballType} • {match.turfType}
           </p>
         </div>
-        <span className={`px-2 py-1 text-xs font-medium rounded-full ${
-          match.status === 'live' 
-            ? 'bg-accent/20 text-accent' 
-            : 'bg-secondary text-secondary-foreground'
-        }`}>
-          {getStatusLabel()}
-        </span>
+        <div className="flex items-center gap-2">
+          <span className={`px-2 py-1 text-xs font-medium rounded-full ${
+            match.status === 'live' 
+              ? 'bg-accent/20 text-accent' 
+              : 'bg-secondary text-secondary-foreground'
+          }`}>
+            {getStatusLabel()}
+          </span>
+          {onDelete && (
+            <button
+              type="button"
+              aria-label="Delete unfinished match"
+              title="Delete unfinished match"
+              onClick={(event) => {
+                event.stopPropagation();
+                onDelete();
+              }}
+              className="p-2 rounded-lg text-destructive hover:bg-destructive/10"
+            >
+              <Trash2 className="w-4 h-4" />
+            </button>
+          )}
+        </div>
       </div>
       <div className="grid grid-cols-2 gap-4 mt-4">
         <div>
@@ -54,6 +77,6 @@ export const MatchCard = ({ match }: MatchCardProps) => {
           </p>
         </div>
       </div>
-    </button>
+    </div>
   );
 };
